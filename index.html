@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="System for Quranic reading education management at Bajo School">
-  <title>Qiroati | Bajo School</title>
+  <meta name="description" content="ระบบจัดการสอนอัลกุรอาน โรงเรียนบาเจาะ">
+  <title>กีรออาตี | โรงเรียนบาเจาะ</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Naskh+Arabic:wght@500;600;700&display=swap" rel="stylesheet">
@@ -15,25 +15,25 @@
   <div id="loginPage" class="login-page">
     <div class="login-card animate-slide">
       <div class="login-logo" lang="ar">ق</div>
-      <h1>Qiroati</h1>
-      <p class="subtitle">Bajo School Quranic Education</p>
+      <h1>กีรออาตี</h1>
+      <p class="subtitle">ระบบจัดการสอนอัลกุรอาน โรงเรียนบาเจาะ</p>
       <p class="arabic-greeting" lang="ar" dir="rtl">&#1575;&#1604;&#1587;&#1604;&#1575;&#1605; &#1593;&#1604;&#1610;&#1603;&#1605;</p>
       <div id="loginError" class="hidden" style="background:#fde8e4;color:#b83c24;padding:10px;border-radius:8px;font-size:.85rem;margin-bottom:16px"></div>
       <form id="loginForm">
         <div class="form-group">
-          <label>Username</label>
-          <input type="text" class="form-control" id="loginUsername" placeholder="Enter username" required>
+          <label>ชื่อผู้ใช้</label>
+          <input type="text" class="form-control" id="loginUsername" placeholder="กรอกชื่อผู้ใช้" required>
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label>รหัสผ่าน</label>
           <div style="position:relative">
-            <input type="password" class="form-control" id="loginPassword" placeholder="Enter password" required style="padding-right:40px">
-            <button type="button" id="togglePassword" onclick="var p=document.getElementById('loginPassword');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Show':'Hide';" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:13px;padding:4px">Show</button>
+            <input type="password" class="form-control" id="loginPassword" placeholder="กรอกรหัสผ่าน" required style="padding-right:40px">
+            <button type="button" id="togglePassword" onclick="var p=document.getElementById('loginPassword');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'แสดง':'ซ่อน';" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:13px;padding:4px">แสดง</button>
           </div>
         </div>
-        <button type="submit" id="loginBtn" class="btn btn-primary btn-block btn-lg mt-2">Login</button>
+        <button type="submit" id="loginBtn" class="btn btn-primary btn-block btn-lg mt-2">เข้าสู่ระบบ</button>
       </form>
-      <p class="text-sm text-muted mt-2 text-center">Admin: Amir / Admin</p>
+      <p class="text-sm text-muted mt-2 text-center">ผู้ดูแล: Amir / Admin</p>
     </div>
   </div>
 
@@ -47,77 +47,77 @@
       <div class="sidebar-brand">
         <div class="brand-mark" lang="ar">ق</div>
         <div>
-          <strong>Qiroati</strong>
-          <span>Bajo School</span>
+          <strong>กีรออาตี</strong>
+          <span>โรงเรียนบาเจาะ</span>
         </div>
       </div>
 
       <nav class="sidebar-nav">
         <div class="sidebar-section">
-          <div class="sidebar-section-title">Main</div>
+          <div class="sidebar-section-title">หลัก</div>
           <a href="#" class="sidebar-link active" data-view="dashboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            Dashboard
+            แดชบอร์ด
           </a>
         </div>
 
         <div class="sidebar-section">
-          <div class="sidebar-section-title">Teaching</div>
+          <div class="sidebar-section-title">การสอน</div>
           <a href="#" class="sidebar-link teacher-only" data-view="classroom">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-            Classroom
+            ห้องเรียน
           </a>
           <a href="#" class="sidebar-link teacher-only" data-view="attendance">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            Attendance
+            ลงเวลาเข้าเรียน
           </a>
           <a href="#" class="sidebar-link teacher-only" data-view="weekly">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            Weekly Progress
+            ความคืบหน้ารายสัปดาห์
           </a>
           <a href="#" class="sidebar-link teacher-only" data-view="monthly">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Monthly Report
+            รายงานรายเดือน
           </a>
           <a href="#" class="sidebar-link teacher-only" data-view="evaluation">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-            Evaluation
+            การประเมิน
           </a>
         </div>
 
         <div class="sidebar-section">
-          <div class="sidebar-section-title">Reports</div>
+          <div class="sidebar-section-title">รายงาน</div>
           <a href="#" class="sidebar-link" data-view="studentDetail">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Student Report
+            รายงานนักเรียน
           </a>
           <a href="#" class="sidebar-link teacher-only" data-view="teacherDetail">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            Teacher Report
+            รายงานครู
           </a>
           <a href="#" class="sidebar-link" data-view="reports">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            All Reports
+            รายงานทั้งหมด
           </a>
         </div>
 
         <div class="sidebar-section">
-          <div class="sidebar-section-title">Management</div>
+          <div class="sidebar-section-title">จัดการ</div>
           <a href="#" class="sidebar-link admin-only" data-view="students">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Students
+            นักเรียน
           </a>
           <a href="#" class="sidebar-link admin-only" data-view="teachers">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            Teachers
+            ครู
           </a>
           <a href="#" class="sidebar-link admin-only" data-view="classes">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-            Classes
+            ห้องเรียน
           </a>
           <a href="#" class="sidebar-link" data-view="notifications">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            Notifications
+            แจ้งเตือน
           </a>
         </div>
       </nav>
@@ -125,10 +125,10 @@
       <div class="sidebar-footer">
         <div class="avatar user-avatar">A</div>
         <div class="user-info">
-          <strong class="user-display-name">Admin</strong>
+          <strong class="user-display-name">ผู้ดูแล</strong>
           <span class="user-display-role">Administrator</span>
         </div>
-        <button class="logout-btn" style="margin-left:auto;color:rgba(255,255,255,.4)" title="Logout">
+        <button class="logout-btn" style="margin-left:auto;color:rgba(255,255,255,.4)" title="ออกจากระบบ">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
@@ -141,12 +141,12 @@
           <button id="menuToggle" class="menu-toggle no-print">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
-          <h1 id="pageTitle" style="font-size:1.1rem;margin:0">Dashboard</h1>
+          <h1 id="pageTitle" style="font-size:1.1rem;margin:0">แดชบอร์ด</h1>
         </div>
         <div class="header-actions">
           <button class="profile-btn no-print" onclick="App.logout()">
             <span class="avatar user-avatar" style="width:28px;height:28px;font-size:12px">A</span>
-            <span class="user-display-name">Admin</span>
+            <span class="user-display-name">ผู้ดูแล</span>
           </button>
         </div>
       </header>
