@@ -5,7 +5,7 @@
 const API = {
   // UPDATE THIS URL after deploying Google Apps Script as Web App
   // Format: https://script.google.com/macros/s/{DEPLOYMENT_ID}/exec
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbzDgMBljJSn_NzV2AhSVkKTIydD3hsZUac_p6hrgga7sN-uHZDYmSCV0RWduUdB5N_-eQ/exec,
+  GAS_URL: '',
 
   async call(action, data) {
     const payload = { action, ...(data || {}) };
