@@ -37,18 +37,33 @@
     const password = document.getElementById('loginPassword').value;
     const btn = document.getElementById('loginBtn');
     const error = document.getElementById('loginError');
+    error.classList.add('hidden');
     if (!username || !password) { error.textContent = 'Please enter credentials'; error.classList.remove('hidden'); return; }
     btn.disabled = true; btn.innerHTML = '<span class=\"spinner\"></span>';
+
+    // Check offline credentials FIRST (works without backend)
+    if (username === 'admin' && password === 'Admin') {
+      this.state.currentUser = { id: 'admin', username: 'admin', name: 'Admin', role: 'admin', classId: '', className: '' };
+      localStorage.setItem('qiroati_user', JSON.stringify(this.state.currentUser));
+      this.showApp(); this.navigateTo('dashboard');
+      this.showToast('success', 'Admin login (offline mode)');
+      btn.disabled = false; btn.innerHTML = 'Login';
+      return;
+    }
+
+    // Try API login
     try {
       const result = await API.login(username, password);
-      if (result.success) { this.state.currentUser = result.user; localStorage.setItem('qiroati_user', JSON.stringify(result.user)); this.showApp(); this.navigateTo('dashboard'); this.showToast('success', 'Welcome ' + result.user.name); }
-      else { error.textContent = result.message; error.classList.remove('hidden'); }
+      if (result.success) {
+        this.state.currentUser = result.user;
+        localStorage.setItem('qiroati_user', JSON.stringify(result.user));
+        this.showApp(); this.navigateTo('dashboard');
+        this.showToast('success', 'Welcome ' + result.user.name);
+      } else {
+        error.textContent = result.message; error.classList.remove('hidden');
+      }
     } catch (err) {
-      if (username === 'admin' && password === 'Admin') {
-        this.state.currentUser = { id: 'admin', username: 'admin', name: 'Admin', role: 'admin', classId: '', className: '' };
-        localStorage.setItem('qiroati_user', JSON.stringify(this.state.currentUser)); this.showApp(); this.navigateTo('dashboard');
-        this.showToast('success', 'Offline mode');
-      } else { error.textContent = 'Cannot connect to server'; error.classList.remove('hidden'); }
+      error.textContent = 'Cannot connect to server'; error.classList.remove('hidden');
     }
     btn.disabled = false; btn.innerHTML = 'Login';
   },
