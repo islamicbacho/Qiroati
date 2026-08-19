@@ -110,10 +110,10 @@ function handleLogin(data) {
     }
   }
 
-  if (username === 'admin' && password === ADMIN_PASSWORD) {
+  if (username === 'Amir' && password === ADMIN_PASSWORD) {
     return {
       success: true,
-      user: { id: 'admin', username: 'admin', name: 'ผู้ดูแลระบบ', role: 'admin', classId: '', className: '' }
+      user: { id: 'admin', username: 'Amir', name: 'Amir', role: 'admin', classId: '', className: '' }
     };
   }
 

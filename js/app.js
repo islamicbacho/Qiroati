@@ -42,11 +42,11 @@
     btn.disabled = true; btn.innerHTML = '<span class=\"spinner\"></span>';
 
     // Check offline credentials FIRST (works without backend)
-    if (username === 'admin' && password === 'Admin') {
-      this.state.currentUser = { id: 'admin', username: 'admin', name: 'Admin', role: 'admin', classId: '', className: '' };
+    if (username === 'Amir' && password === 'Admin') {
+      this.state.currentUser = { id: 'admin', username: 'Amir', name: 'Amir', role: 'admin', classId: '', className: '' };
       localStorage.setItem('qiroati_user', JSON.stringify(this.state.currentUser));
       this.showApp(); this.navigateTo('dashboard');
-      this.showToast('success', 'Admin login (offline mode)');
+      this.showToast('success', 'Amir login (offline mode)');
       btn.disabled = false; btn.innerHTML = 'Login';
       return;
     }
