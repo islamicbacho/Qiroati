@@ -127,8 +127,6 @@
     switch (view) {
       case 'dashboard': await this.renderDashboard(c); break;
       case 'classroom': await this.renderClassroom(c); break;
-      case 'attendance': await this.renderAttendance(c); break;
-      case 'weekly': await this.renderWeeklyProgress(c); break;
       case 'monthly': await this.renderMonthlyReport(c); break;
       case 'evaluation': await this.renderEvaluation(c); break;
       case 'students': await this.renderStudents(c); break;
@@ -195,183 +193,114 @@
       '</div>';
   },
 
-  // ==================== ห้องเรียน ====================
+  // ==================== ห้องเรียน (แบบรวม) ====================
   async renderClassroom(c) {
-    var classes = [];
-    try { var r = await API.getClasses(); if (r.success) classes = r.classes; } catch (e) {}
-    var h = '<div class="section-header"><h2>ห้องเรียน</h2><div class="actions"><button class="btn btn-primary btn-sm" onclick="App.showAddClassModal()">+ เพิ่มห้องเรียน</button></div></div><div class="class-selector">';
-    if (classes.length === 0) h += '<div class="empty-state w-full"><h3>ยังไม่มีห้องเรียน</h3></div>';
-    else classes.forEach(function (cls) {
-      var sel = App.state.selectedClass === cls.id ? 'selected' : '';
-      h += '<div class="class-card ' + sel + '" onclick="App.selectClass(\'' + cls.id + '\')"><div class="class-icon">ห</div><h4>' + cls.name + '</h4><p>' + (cls.teacherName || '') + '</p><p class="text-xs text-muted">' + (cls.schedule || '') + '</p></div>';
-    });
-    h += '</div>';
+    var teachers = [];
+    try { var r = await API.getTeachers(); if (r.success) teachers = r.teachers; } catch (e) {}
+    var h = '<div class="section-header"><h2>ห้องเรียน</h2></div>';
+    if (teachers.length === 0) h += '<div class="empty-state"><h3>ยังไม่มีครูผู้สอน</h3></div>';
+    else {
+      h += '<div class="class-selector">';
+      teachers.forEach(function (t) {
+        var cnt = t.assignedClasses ? t.assignedClasses.length : 0;
+        h += '<div class="class-card" onclick="App.openTeacherClassroom(\'' + t.id + '\')">' +
+          '<div class="class-icon">' + t.name.charAt(0) + '</div>' +
+          '<h4>' + t.name + '</h4>' +
+          '<p class="text-xs text-muted">' + (t.assignedClasses || []).join(', ') + ' (' + cnt + ' ห้อง)</p>' +
+          '</div>';
+      });
+      h += '</div>';
+    }
     c.innerHTML = h;
   },
-  selectClass(id) { this.state.selectedClass = id; this.renderClassroom(document.getElementById('contentArea')); },
-  showAddClassModal() {
-    this.showModal('เพิ่มห้องเรียน', '<form id="addClassForm" onsubmit="App.addClass(event)">' +
-      '<div class="form-group"><label>ชื่อห้องเรียน</label><input type="text" class="form-control" id="newClassName" required></div>' +
-      '<div class="form-group"><label>ชื่อครูผู้สอน</label><input type="text" class="form-control" id="newClassTeacher"></div>' +
-      '<div class="form-group"><label>ตารางเรียน</label><input type="text" class="form-control" id="newClassSchedule" value="วันศุกร์ 09:00-10:00"></div>' +
-      '<div class="form-group"><label>ห้อง</label><input type="text" class="form-control" id="newClassRoom"></div>' +
-      '<div class="flex gap-1 mt-2"><button type="submit" class="btn btn-primary">บันทึก</button><button type="button" class="btn btn-ghost" onclick="App.closeModal()">ยกเลิก</button></div></form>');
-  },
-  async addClass(e) {
-    e.preventDefault();
-    var r = await API.addClass({
-      name: document.getElementById('newClassName').value,
-      teacherName: document.getElementById('newClassTeacher').value,
-      schedule: document.getElementById('newClassSchedule').value,
-      room: document.getElementById('newClassRoom').value
-    });
-    if (r.success) { this.closeModal(); this.showToast('success', r.message); this.renderClassroom(document.getElementById('contentArea')); }
-    else this.showToast('error', r.message);
-  },
-
-  // ==================== ลงเวลาเข้าเรียน ====================
-  async renderAttendance(c) {
-    var classes = [];
-    try { var r = await API.getClasses(); if (r.success) classes = r.classes; } catch (e) {}
-    var today = new Date().toISOString().split('T')[0];
-    var h = '<div class="section-header"><h2>ลงเวลาเข้าเรียน</h2></div><div class="filter-bar">' +
-      '<select class="form-control" id="attClassSelect" onchange="App.loadAttendanceStudents()"><option value="">เลือกห้องเรียน</option>';
-    classes.forEach(function (cls) { h += '<option value="' + cls.id + '">' + cls.name + '</option>'; });
-    h += '</select><input type="date" class="form-control" id="attDate" value="' + today + '">' +
-      '<button class="btn btn-primary btn-sm" onclick="App.loadAttendanceStudents()">โหลดข้อมูล</button>' +
-      '<button class="btn btn-success btn-sm" onclick="App.saveAttendance()">บันทึก</button></div>' +
-      '<div id="attendanceGrid" class="attendance-grid"></div>';
-    c.innerHTML = h;
-  },
-  async loadAttendanceStudents() {
-    var cid = document.getElementById('attClassSelect').value;
-    var date = document.getElementById('attDate').value;
-    var grid = document.getElementById('attendanceGrid');
-    if (!cid) { grid.innerHTML = '<p class="text-muted">กรุณาเลือกห้องเรียน</p>'; return; }
-    var students = [], existing = [];
-    try {
-      var sr = await API.getStudentsByClass(cid); if (sr.success) students = sr.students;
-      var ar = await API.getAttendance({ classId: cid, date: date }); if (ar.success) existing = ar.records;
-    } catch (e) {}
-    var attMap = {};
-    existing.forEach(function (r) { attMap[r.studentId] = r.status; });
-    if (students.length === 0) { grid.innerHTML = '<div class="empty-state"><h3>ยังไม่มีนักเรียน</h3></div>'; return; }
-    var h = '';
-    students.forEach(function (s) {
-      var cs = attMap[s.id] || '';
-      h += '<div class="attendance-card" data-student-id="' + s.id + '">' +
-        '<div class="student-name">' + s.firstName + ' ' + s.lastName + '</div>' +
-        '<div class="student-id">' + s.id + '</div>' +
-        '<div class="status-btns">' +
-        '<button class="status-btn present ' + (cs === 'present' ? 'active' : '') + '" onclick="App.setStatus(this,\'present\')">มา</button>' +
-        '<button class="status-btn absent ' + (cs === 'absent' ? 'active' : '') + '" onclick="App.setStatus(this,\'absent\')">ไม่มา</button>' +
-        '<button class="status-btn late ' + (cs === 'late' ? 'active' : '') + '" onclick="App.setStatus(this,\'late\')">สาย</button>' +
-        '</div></div>';
-    });
-    grid.innerHTML = h;
-  },
-  setStatus(btn, status) {
-    var card = btn.closest('.attendance-card');
-    card.querySelectorAll('.status-btn').forEach(function (b) { b.classList.remove('active'); });
-    btn.classList.add('active');
-  },
-  async saveAttendance() {
-    var cid = document.getElementById('attClassSelect').value;
-    var date = document.getElementById('attDate').value;
-    if (!cid) { this.showToast('error', 'กรุณาเลือกห้องเรียน'); return; }
-    var records = [];
-    document.querySelectorAll('.attendance-card').forEach(function (card) {
-      var sid = card.dataset.studentId;
-      var name = card.querySelector('.student-name').textContent;
-      var abtn = card.querySelector('.status-btn.active');
-      var status = 'absent';
-      if (abtn) {
-        if (abtn.classList.contains('present')) status = 'present';
-        else if (abtn.classList.contains('late')) status = 'late';
-      }
-      records.push({ studentId: sid, studentName: name, status: status });
-    });
-    if (records.length === 0) { this.showToast('error', 'ยังไม่มีนักเรียน'); return; }
-    var sel = document.getElementById('attClassSelect');
-    var cn = sel.options[sel.selectedIndex].textContent;
-    var r = await API.saveAttendance({ date: date, classId: cid, className: cn, records: records, recordedBy: this.state.currentUser ? this.state.currentUser.name : '' });
-    if (r.success) this.showToast('success', 'บันทึกเวลาเข้าเรียนแล้ว');
-    else this.showToast('error', r.message);
-  },
-
-  // ==================== ความคืบหน้ารายสัปดาห์ ====================
-  async renderWeeklyProgress(c) {
-    var classes = [];
-    try { var r = await API.getClasses(); if (r.success) classes = r.classes; } catch (e) {}
+  async openTeacherClassroom(teacherId) {
+    var c = document.getElementById('contentArea');
+    c.innerHTML = '<div class="text-center mt-3"><span class="spinner"></span></div>';
+    var students = [];
+    try { var r = await API.getStudents(); if (r.success) students = r.students.filter(function(s) { return s.teacherName === teacherId; }); } catch (e) {}
     var now = new Date();
-    var h = '<div class="section-header"><h2>ความคืบหน้ารายสัปดาห์</h2></div><div class="filter-bar">' +
-      '<select class="form-control" id="wpClassSelect"><option value="">เลือกห้องเรียน</option>';
-    classes.forEach(function (cls) { h += '<option value="' + cls.id + '">' + cls.name + '</option>'; });
-    h += '</select><select class="form-control" id="wpYear"><option value="' + now.getFullYear() + '">' + now.getFullYear() + '</option></select>' +
+    var today = now.toISOString().split('T')[0];
+    var h = '<div class="section-header"><h2>' + teacherId + '</h2>' +
+      '<div class="actions"><button class="btn btn-ghost btn-sm" onclick="App.renderClassroom(document.getElementById(\'contentArea\'))">← กลับ</button></div></div>';
+    h += '<div class="filter-bar">' +
+      '<input type="date" class="form-control" id="attDate" value="' + today + '" style="max-width:160px">' +
       '<select class="form-control" id="wpMonth">';
     for (var m = 1; m <= 12; m++) h += '<option value="' + m + '"' + (m === this.state.currentMonth ? ' selected' : '') + '>' + this.getMonthName(m) + '</option>';
-    h += '</select><select class="form-control" id="wpWeek"><option value="1">สัปดาห์ที่ 1</option><option value="2">สัปดาห์ที่ 2</option><option value="3">สัปดาห์ที่ 3</option><option value="4">สัปดาห์ที่ 4</option></select>' +
-      '<button class="btn btn-primary btn-sm" onclick="App.loadWeeklyStudents()">โหลดข้อมูล</button>' +
-      '<button class="btn btn-success btn-sm" onclick="App.saveWeeklyProgress()">บันทึก</button></div>' +
-      '<div id="weeklyTable"></div>';
+    h += '</select>' +
+      '<select class="form-control" id="wpWeek"><option value="1">สัปดาห์ที่ 1</option><option value="2">สัปดาห์ที่ 2</option><option value="3">สัปดาห์ที่ 3</option><option value="4">สัปดาห์ที่ 4</option></select>' +
+      '<button class="btn btn-success btn-sm" onclick="App.saveAllTeacherData(\'' + teacherId + '\')">บันทึกทั้งหมด</button></div>';
+    if (students.length === 0) {
+      h += '<div class="empty-state"><h3>ยังไม่มีนักเรียนในสังกัด</h3></div>';
+    } else {
+      h += '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อนักเรียน</th><th>ชั้น</th><th>ห้อง</th>' +
+        '<th>เข้าเรียน</th><th>หน้าอ่าน</th><th>หน้าทั้งหมด</th><th>ระดับ</th><th>หมายเหตุ</th></tr></thead><tbody>';
+      students.forEach(function (s, i) {
+        h += '<tr><td>' + (i + 1) + '</td>' +
+          '<td><strong>' + s.firstName + '</strong> ' + s.lastName + '</td>' +
+          '<td>' + (s.grade || '-') + '</td>' +
+          '<td>' + (s.className || '-') + '</td>' +
+          '<td><select class="form-control att-status" data-id="' + s.id + '" data-name="' + s.firstName + ' ' + s.lastName + '" data-class="' + s.className + '" style="width:90px">' +
+          '<option value="">-</option>' +
+          '<option value="present">มา</option>' +
+          '<option value="absent">ไม่มา</option>' +
+          '<option value="late">สาย</option>' +
+          '</select></td>' +
+          '<td><input type="number" class="form-control wp-pages" data-id="' + s.id + '" data-name="' + s.firstName + ' ' + s.lastName + '" value="0" min="0" style="width:70px"></td>' +
+          '<td><input type="number" class="form-control wp-total" data-id="' + s.id + '" value="0" min="0" style="width:70px"></td>' +
+          '<td><select class="form-control wp-level" data-id="' + s.id + '" style="width:90px">' +
+          '<option value="">-</option>' +
+          '<option value="beginner">เริ่มต้น</option>' +
+          '<option value="intermediate">ปานกลาง</option>' +
+          '<option value="advanced">ขั้นสูง</option>' +
+          '</select></td>' +
+          '<td><input type="text" class="form-control wp-note" data-id="' + s.id + '" value="" style="width:100px"></td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
     c.innerHTML = h;
   },
-  async loadWeeklyStudents() {
-    var cid = document.getElementById('wpClassSelect').value;
-    var yr = document.getElementById('wpYear').value;
-    var mo = document.getElementById('wpMonth').value;
-    var wk = document.getElementById('wpWeek').value;
-    var tbl = document.getElementById('weeklyTable');
-    if (!cid) { tbl.innerHTML = '<p class="text-muted">กรุณาเลือกห้องเรียน</p>'; return; }
-    var students = [], existing = [];
-    try {
-      var sr = await API.getStudentsByClass(cid); if (sr.success) students = sr.students;
-      var wr = await API.getWeeklyProgress({ classId: cid, year: yr, month: mo, weekNumber: wk }); if (wr.success) existing = wr.records;
-    } catch (e) {}
-    var pm = {};
-    existing.forEach(function (r) { pm[r.studentId] = r; });
-    if (students.length === 0) { tbl.innerHTML = '<div class="empty-state"><h3>ยังไม่มีนักเรียน</h3></div>'; return; }
-    var h = '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อนักเรียน</th><th>อ่านแล้ว</th><th>หน้าทั้งหมด</th><th>ระดับ</th><th>เข้าเรียน</th><th>หมายเหตุ</th></tr></thead><tbody>';
-    students.forEach(function (s, i) {
-      var p = pm[s.id] || {};
-      h += '<tr><td>' + (i + 1) + '</td><td>' + s.firstName + ' ' + s.lastName + '</td>';
-      h += '<td><input type="number" class="form-control wp-pages" data-id="' + s.id + '" data-name="' + s.firstName + ' ' + s.lastName + '" value="' + (p.pagesRead || 0) + '" min="0" style="width:80px"></td>';
-      h += '<td><input type="number" class="form-control wp-total" data-id="' + s.id + '" value="' + (p.totalPages || 0) + '" min="0" style="width:80px"></td>';
-      h += '<td><select class="form-control wp-level" data-id="' + s.id + '" style="width:100px"><option value="">-</option><option value="beginner"' + (p.readingLevel === 'beginner' ? ' selected' : '') + '>เริ่มต้น</option><option value="intermediate"' + (p.readingLevel === 'intermediate' ? ' selected' : '') + '>ปานกลาง</option><option value="advanced"' + (p.readingLevel === 'advanced' ? ' selected' : '') + '>ขั้นสูง</option></select></td>';
-      h += '<td><input type="number" class="form-control wp-att" data-id="' + s.id + '" value="' + (p.attendanceCount || 0) + '" min="0" max="4" style="width:70px"></td>';
-      h += '<td><input type="text" class="form-control wp-note" data-id="' + s.id + '" value="' + (p.note || '') + '" style="width:120px"></td></tr>';
-    });
-    h += '</tbody></table></div>';
-    tbl.innerHTML = h;
-  },
-  async saveWeeklyProgress() {
-    var cid = document.getElementById('wpClassSelect').value;
-    var yr = parseInt(document.getElementById('wpYear').value);
+  async saveAllTeacherData(teacherId) {
+    var now = new Date();
+    var date = document.getElementById('attDate').value;
     var mo = parseInt(document.getElementById('wpMonth').value);
     var wk = parseInt(document.getElementById('wpWeek').value);
-    if (!cid) { this.showToast('error', 'กรุณาเลือกห้องเรียน'); return; }
-    var sel = document.getElementById('wpClassSelect');
-    var cn = sel.options[sel.selectedIndex].textContent;
-    var records = [];
-    document.querySelectorAll('.wp-pages').forEach(function (inp) {
+    var yr = now.getFullYear();
+    var attRecords = [];
+    var wpRecords = [];
+    document.querySelectorAll('.att-status').forEach(function(sel) {
+      var sid = sel.dataset.id;
+      var nm = sel.dataset.name;
+      var cls = sel.dataset.class;
+      var status = sel.value;
+      if (status) attRecords.push({ studentId: sid, studentName: nm, status: status });
+    });
+    document.querySelectorAll('.wp-pages').forEach(function(inp) {
       var id = inp.dataset.id;
       var nm = inp.dataset.name;
       var tot = document.querySelector('.wp-total[data-id="' + id + '"]');
       var lvl = document.querySelector('.wp-level[data-id="' + id + '"]');
-      var att = document.querySelector('.wp-att[data-id="' + id + '"]');
       var note = document.querySelector('.wp-note[data-id="' + id + '"]');
-      records.push({
+      wpRecords.push({
         studentId: id, studentName: nm,
         pagesRead: parseInt(inp.value) || 0,
         totalPages: tot ? parseInt(tot.value) || 0 : 0,
         readingLevel: lvl ? lvl.value : '',
-        attendanceCount: att ? parseInt(att.value) || 0 : 0,
+        attendanceCount: 1,
         note: note ? note.value : ''
       });
     });
-    var r = await API.saveWeeklyProgress({ year: yr, month: mo, weekNumber: wk, classId: cid, className: cn, records: records, submittedBy: this.state.currentUser ? this.state.currentUser.name : '' });
-    if (r.success) this.showToast('success', 'บันทึกความคืบหน้าแล้ว');
-    else this.showToast('error', r.message);
+    var saved = 0;
+    if (attRecords.length > 0) {
+      var firstClass = attRecords[0] ? document.querySelector('.att-status[data-id="' + attRecords[0].studentId + '"]').dataset.class : '';
+      var ar = await API.saveAttendance({ date: date, classId: teacherId, className: firstClass, records: attRecords, recordedBy: this.state.currentUser ? this.state.currentUser.name : '' });
+      if (ar.success) saved++;
+    }
+    if (wpRecords.length > 0) {
+      var wr = await API.saveWeeklyProgress({ year: yr, month: mo, weekNumber: wk, classId: teacherId, className: teacherId, records: wpRecords, submittedBy: this.state.currentUser ? this.state.currentUser.name : '' });
+      if (wr.success) saved++;
+    }
+    if (saved > 0) this.showToast('success', 'บันทึกข้อมูลสำเร็จ');
+    else this.showToast('info', 'ไม่มีข้อมูลที่ต้องบันทึก');
   },
 
   // ==================== รายงานรายเดือน ====================
@@ -489,9 +418,9 @@
   displayStudents(students) {
     var el = document.getElementById('studentTable');
     if (students.length === 0) { el.innerHTML = '<div class="empty-state"><h3>ไม่พบนักเรียน</h3></div>'; return; }
-    var h = '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อ</th><th>รหัส</th><th>ห้อง</th><th>โทรศัพท์</th><th>ผู้ปกครอง</th><th>สถานะ</th><th>การดำเนินการ</th></tr></thead><tbody>';
+    var h = '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อ</th><th>ชั้น</th><th>ห้อง</th><th>ครูผู้สอน</th><th>สถานะ</th><th>การดำเนินการ</th></tr></thead><tbody>';
     students.forEach(function (s, i) {
-      h += '<tr><td>' + (i + 1) + '</td><td>' + s.firstName + ' ' + s.lastName + '</td><td class="text-xs">' + s.id + '</td><td>' + (s.className || '-') + '</td><td>' + (s.phone || '-') + '</td><td>' + (s.parentName || '-') + '</td><td>' + App.statusBadge(s.status) + '</td>';
+      h += '<tr><td>' + (i + 1) + '</td><td>' + s.firstName + ' ' + s.lastName + '</td><td>' + (s.grade || '-') + '</td><td>' + (s.className || '-') + '</td><td>' + (s.teacherName || '-') + '</td><td>' + App.statusBadge(s.status) + '</td>';
       h += '<td><button class="btn btn-sm btn-ghost" onclick="App.editStudent(\'' + s.id + '\')">แก้ไข</button> <button class="btn btn-sm btn-danger" onclick="App.confirmDeleteStudent(\'' + s.id + '\',\'' + s.firstName + ' ' + s.lastName + '\')">ลบ</button></td></tr>';
     });
     h += '</tbody></table></div>';
