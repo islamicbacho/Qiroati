@@ -26,7 +26,10 @@
         </div>
         <div class="form-group">
           <label>Password</label>
-          <input type="password" class="form-control" id="loginPassword" placeholder="Enter password" required>
+          <div style="position:relative">
+            <input type="password" class="form-control" id="loginPassword" placeholder="Enter password" required style="padding-right:40px">
+            <button type="button" id="togglePassword" onclick="var p=document.getElementById('loginPassword');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Show':'Hide';" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:13px;padding:4px">Show</button>
+          </div>
         </div>
         <button type="submit" id="loginBtn" class="btn btn-primary btn-block btn-lg mt-2">Login</button>
       </form>
