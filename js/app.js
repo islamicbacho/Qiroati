@@ -304,97 +304,155 @@
 
   // ==================== รายงานรายเดือน ====================
   async renderMonthlyReport(c) {
-    var classes = [], reports = [];
-    try {
-      var cr = await API.getClasses(); if (cr.success) classes = cr.classes;
-      var rr = await API.getMonthlyReports(); if (rr.success) reports = rr.reports;
-    } catch (e) {}
+    var teachers = [];
+    try { var r = await API.getTeachers(); if (r.success) teachers = r.teachers; } catch (e) {}
     var now = new Date();
-    var h = '<div class="section-header"><h2>รายงานรายเดือน</h2><div class="actions"><button class="btn btn-success btn-sm" onclick="App.generateAllPDFs()">สร้าง PDF ทั้งหมด</button></div></div><div class="filter-bar"><select class="form-control" id="mrClass"><option value="">ทุกห้องเรียน</option>';
-    classes.forEach(function (cls) { h += '<option value="' + cls.id + '">' + cls.name + '</option>'; });
-    h += '</select><select class="form-control" id="mrYear"><option value="' + now.getFullYear() + '">' + now.getFullYear() + '</option></select><select class="form-control" id="mrMonth">';
+    var h = '<div class="section-header"><h2>รายงานรายเดือน</h2></div>' +
+      '<div class="filter-bar">' +
+      '<select class="form-control" id="mrTeacher"><option value="">เลือกครูผู้สอน</option>';
+    teachers.forEach(function (t) { h += '<option value="' + t.id + '">' + t.name + '</option>'; });
+    h += '</select><select class="form-control" id="mrYear"><option value="' + now.getFullYear() + '">' + now.getFullYear() + '</option></select>' +
+      '<select class="form-control" id="mrMonth">';
     for (var m = 1; m <= 12; m++) h += '<option value="' + m + '"' + (m === this.state.currentMonth ? ' selected' : '') + '>' + this.getMonthName(m) + '</option>';
-    h += '</select><button class="btn btn-primary btn-sm" onclick="App.loadReports()">โหลดข้อมูล</button></div><div id="reportList"></div>';
+    h += '</select><button class="btn btn-primary btn-sm" onclick="App.loadMonthlyReport()">โหลดข้อมูล</button></div>' +
+      '<div id="monthlyReportContent"></div>';
     c.innerHTML = h;
-    this.displayReports(reports);
   },
-  displayReports(reports) {
-    var el = document.getElementById('reportList');
-    if (reports.length === 0) { el.innerHTML = '<div class="empty-state"><h3>ยังไม่มีรายงาน</h3><p>สร้างรายงาน PDF สำหรับแต่ละห้องเรียน</p></div>'; return; }
-    var h = '<div class="table-wrap"><table><thead><tr><th>ห้องเรียน</th><th>เดือน</th><th>ไฟล์</th><th>สถานะ</th><th>หมายเหตุ</th><th>การดำเนินการ</th></tr></thead><tbody>';
-    reports.forEach(function (r) {
-      h += '<tr><td><strong>' + r.className + '</strong></td><td>' + App.getMonthName(r.month) + ' ' + r.year + '</td>';
-      h += '<td>' + (r.fileName ? '<a href="' + r.fileURL + '" target="_blank">ดู PDF</a>' : '-') + '</td>';
-      h += '<td>' + App.statusBadge(r.status) + '</td><td>' + (r.adminNote || '-') + '</td>';
-      h += '<td><button class="btn btn-sm btn-ghost" onclick="App.generateClassPDF(\'' + r.classId + '\',\'' + r.className + '\')">สร้าง PDF</button></td></tr>';
+  async loadMonthlyReport() {
+    var teacherId = document.getElementById('mrTeacher').value;
+    var yr = document.getElementById('mrYear').value;
+    var mo = document.getElementById('mrMonth').value;
+    var el = document.getElementById('monthlyReportContent');
+    if (!teacherId) { el.innerHTML = '<p class="text-muted">กรุณาเลือกครูผู้สอน</p>'; return; }
+    var students = [], week1 = [], week2 = [], week3 = [], week4 = [];
+    try {
+      var sr = await API.getStudents(); if (sr.success) students = sr.students.filter(function(s) { return s.teacherName === teacherId; });
+      var r1 = await API.getWeeklyProgress({ classId: teacherId, year: yr, month: mo, weekNumber: 1 }); if (r1.success) week1 = r1.records;
+      var r2 = await API.getWeeklyProgress({ classId: teacherId, year: yr, month: mo, weekNumber: 2 }); if (r2.success) week2 = r2.records;
+      var r3 = await API.getWeeklyProgress({ classId: teacherId, year: yr, month: mo, weekNumber: 3 }); if (r3.success) week3 = r3.records;
+      var r4 = await API.getWeeklyProgress({ classId: teacherId, year: yr, month: mo, weekNumber: 4 }); if (r4.success) week4 = r4.records;
+    } catch (e) {}
+    var weeks = [week1, week2, week3, week4];
+    var stuStats = {};
+    students.forEach(function (s) {
+      stuStats[s.id] = { name: s.firstName + ' ' + s.lastName, grade: s.grade, className: s.className, totalPages: 0, weeksPresent: 0, weekPages: [0, 0, 0, 0] };
+    });
+    weeks.forEach(function (wk, wi) {
+      wk.forEach(function (p) {
+        if (!stuStats[p.studentId]) return;
+        var pg = parseInt(p.pagesRead) || 0;
+        stuStats[p.studentId].totalPages += pg;
+        stuStats[p.studentId].weekPages[wi] = pg;
+        var att = parseInt(p.attendanceCount) || 0;
+        if (att > 0) stuStats[p.studentId].weeksPresent++;
+      });
+    });
+    var hasData = false;
+    Object.keys(stuStats).forEach(function(k) { if (stuStats[k].totalPages > 0 || stuStats[k].weeksPresent > 0) hasData = true; });
+    if (!hasData) { el.innerHTML = '<div class="empty-state"><h3>ยังไม่มีข้อมูลบันทึกรายสัปดาห์</h3><p>กรุณาบันทึกข้อมูลรายสัปดาห์ก่อนอย่างน้อย 1 สัปดาห์</p></div>'; return; }
+    var h = '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อนักเรียน</th><th>ชั้น</th><th>ห้อง</th>' +
+      '<th>สัปดาห์ 1</th><th>สัปดาห์ 2</th><th>สัปดาห์ 3</th><th>สัปดาห์ 4</th>' +
+      '<th>หน้ารวม</th><th>เข้าเรียน (สัปดาห์)</th></tr></thead><tbody>';
+    var i = 1;
+    Object.keys(stuStats).forEach(function (k) {
+      var st = stuStats[k];
+      h += '<tr><td>' + i + '</td><td><strong>' + st.name + '</strong></td><td>' + (st.grade || '-') + '</td><td>' + (st.className || '-') + '</td>';
+      for (var wi = 0; wi < 4; wi++) {
+        var pg = st.weekPages[wi];
+        h += '<td>' + (pg > 0 ? pg + ' หน้า' : '<span class="text-muted">-</span>') + '</td>';
+      }
+      h += '<td><strong>' + st.totalPages + '</strong></td>';
+      var attPct = Math.round((st.weeksPresent / 4) * 100);
+      var attColor = attPct >= 80 ? 'badge-success' : attPct >= 50 ? 'badge-warning' : 'badge-danger';
+      h += '<td><span class="badge ' + attColor + '">' + st.weeksPresent + '/4 สัปดาห์ (' + attPct + '%)</span></td></tr>';
+      i++;
     });
     h += '</tbody></table></div>';
     el.innerHTML = h;
   },
-  async loadReports() {
-    var cid = document.getElementById('mrClass').value;
-    var yr = document.getElementById('mrYear').value;
-    var mo = document.getElementById('mrMonth').value;
-    try { var r = await API.getMonthlyReports({ classId: cid, year: yr, month: mo }); if (r.success) this.displayReports(r.reports); } catch (e) {}
-  },
-  async generateClassPDF(cid, cn) {
-    var yr = document.getElementById('mrYear').value;
-    var mo = document.getElementById('mrMonth').value;
-    this.showToast('info', 'กำลังสร้าง PDF...');
-    var r = await API.generatePDF({ year: parseInt(yr), month: parseInt(mo), classId: cid, className: cn });
-    if (r.success) { this.showToast('success', 'สร้าง PDF สำเร็จ'); this.loadReports(); }
-    else this.showToast('error', r.message);
-  },
-  async generateAllPDFs() {
-    var yr = document.getElementById('mrYear').value;
-    var mo = document.getElementById('mrMonth').value;
-    this.showToast('info', 'กำลังสร้าง PDF ทั้งหมด...');
-    var r = await API.generateAllPDFs({ year: parseInt(yr), month: parseInt(mo) });
-    if (r.success) { this.showToast('success', 'สร้าง PDF ทั้งหมดสำเร็จ'); this.loadReports(); }
-    else this.showToast('error', r.message);
-  },
 
   // ==================== การประเมิน ====================
   async renderEvaluation(c) {
-    var classes = [];
-    try { var r = await API.getClasses(); if (r.success) classes = r.classes; } catch (e) {}
+    var teachers = [];
+    try { var r = await API.getTeachers(); if (r.success) teachers = r.teachers; } catch (e) {}
     var now = new Date();
-    var h = '<div class="section-header"><h2>การประเมิน</h2></div><div class="filter-bar"><select class="form-control" id="evalClassSelect"><option value="">เลือกห้องเรียน</option>';
-    classes.forEach(function (cls) { h += '<option value="' + cls.id + '">' + cls.name + '</option>'; });
-    h += '</select><select class="form-control" id="evalYear"><option value="' + now.getFullYear() + '">' + now.getFullYear() + '</option></select><select class="form-control" id="evalMonth">';
+    var h = '<div class="section-header"><h2>การประเมินแนวโน้มนักเรียน</h2></div>' +
+      '<div class="filter-bar">' +
+      '<select class="form-control" id="evalTeacher"><option value="">เลือกครูผู้สอน</option>';
+    teachers.forEach(function (t) { h += '<option value="' + t.id + '">' + t.name + '</option>'; });
+    h += '</select><select class="form-control" id="evalYear"><option value="' + now.getFullYear() + '">' + now.getFullYear() + '</option></select>' +
+      '<select class="form-control" id="evalMonth">';
     for (var m = 1; m <= 12; m++) h += '<option value="' + m + '"' + (m === this.state.currentMonth ? ' selected' : '') + '>' + this.getMonthName(m) + '</option>';
-    h += '</select><button class="btn btn-primary btn-sm" onclick="App.loadEvalStudents()">โหลดข้อมูล</button></div><div id="evalContent"></div>';
+    h += '</select><button class="btn btn-primary btn-sm" onclick="App.loadEvaluation()">ประเมิน</button></div>' +
+      '<div id="evalContent"></div>';
     c.innerHTML = h;
   },
-  async loadEvalStudents() {
-    var cid = document.getElementById('evalClassSelect').value;
+  evalRating(pct) {
+    if (pct >= 80) return { label: 'ดีมาก', color: 'badge-success', icon: 'A' };
+    if (pct >= 70) return { label: 'ดี', color: 'badge-info', icon: 'B' };
+    if (pct >= 50) return { label: 'ปานกลาง', color: 'badge-warning', icon: 'C' };
+    return { label: 'ปรับปรุง', color: 'badge-danger', icon: 'D' };
+  },
+  async loadEvaluation() {
+    var teacherId = document.getElementById('evalTeacher').value;
     var yr = document.getElementById('evalYear').value;
     var mo = document.getElementById('evalMonth').value;
     var el = document.getElementById('evalContent');
-    if (!cid) { el.innerHTML = '<p class="text-muted">กรุณาเลือกห้องเรียน</p>'; return; }
-    var students = [], progress = [];
+    if (!teacherId) { el.innerHTML = '<p class="text-muted">กรุณาเลือกครูผู้สอน</p>'; return; }
+    var students = [], week1 = [], week2 = [], week3 = [], week4 = [];
     try {
-      var sr = await API.getStudentsByClass(cid); if (sr.success) students = sr.students;
-      var pr = await API.getWeeklyProgress({ classId: cid, year: yr, month: mo }); if (pr.success) progress = pr.records;
+      var sr = await API.getStudents(); if (sr.success) students = sr.students.filter(function(s) { return s.teacherName === teacherId; });
+      var r1 = await API.getWeeklyProgress({ classId: teacherId, year: yr, month: mo, weekNumber: 1 }); if (r1.success) week1 = r1.records;
+      var r2 = await API.getWeeklyProgress({ classId: teacherId, year: yr, month: mo, weekNumber: 2 }); if (r2.success) week2 = r2.records;
+      var r3 = await API.getWeeklyProgress({ classId: teacherId, year: yr, month: mo, weekNumber: 3 }); if (r3.success) week3 = r3.records;
+      var r4 = await API.getWeeklyProgress({ classId: teacherId, year: yr, month: mo, weekNumber: 4 }); if (r4.success) week4 = r4.records;
     } catch (e) {}
+    var weeks = [week1, week2, week3, week4];
     var stuStats = {};
-    students.forEach(function (s) { stuStats[s.id] = { weeksAttended: 0, weeksRead: 0, totalPages: 0 }; });
-    progress.forEach(function (p) {
-      if (!stuStats[p.studentId]) return;
-      if (parseInt(p.pagesRead) > 0) stuStats[p.studentId].weeksRead++;
-      stuStats[p.studentId].weeksAttended += Math.min(parseInt(p.attendanceCount) || 0, 1);
-      stuStats[p.studentId].totalPages += parseInt(p.pagesRead) || 0;
+    students.forEach(function (s) {
+      stuStats[s.id] = { name: s.firstName + ' ' + s.lastName, grade: s.grade, className: s.className, totalPages: 0, weeksPresent: 0, weeklyAtt: [0, 0, 0, 0] };
     });
-    var h = '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อนักเรียน</th><th>อ่าน (จาก 4)</th><th>เข้าเรียน (จาก 4)</th><th>หน้า</th><th>ผลลัพธ์</th></tr></thead><tbody>';
-    students.forEach(function (s, i) {
-      var st = stuStats[s.id];
-      var r = (st.weeksRead >= 3 && st.weeksAttended >= 3) ? 'pass' : 'fail';
-      h += '<tr><td>' + (i + 1) + '</td><td>' + s.firstName + ' ' + s.lastName + '</td>';
-      h += '<td><span class="' + (st.weeksRead >= 3 ? 'badge badge-success' : 'badge badge-danger') + '">' + st.weeksRead + '/4</span></td>';
-      h += '<td><span class="' + (st.weeksAttended >= 3 ? 'badge badge-success' : 'badge badge-danger') + '">' + st.weeksAttended + '/4</span></td>';
-      h += '<td>' + st.totalPages + '</td><td>' + App.statusBadge(r) + '</td></tr>';
+    weeks.forEach(function (wk, wi) {
+      wk.forEach(function (p) {
+        if (!stuStats[p.studentId]) return;
+        stuStats[p.studentId].totalPages += parseInt(p.pagesRead) || 0;
+        var att = parseInt(p.attendanceCount) || 0;
+        if (att > 0) { stuStats[p.studentId].weeksPresent++; stuStats[p.studentId].weeklyAtt[wi] = 1; }
+      });
+    });
+    var hasData = false;
+    Object.keys(stuStats).forEach(function(k) { if (stuStats[k].totalPages > 0 || stuStats[k].weeksPresent > 0) hasData = true; });
+    if (!hasData) { el.innerHTML = '<div class="empty-state"><h3>ยังไม่มีข้อมูลในเดือนนี้</h3><p>กรุณาบันทึกข้อมูลรายสัปดาห์ก่อน</p></div>'; return; }
+    var summary = { veryGood: 0, good: 0, moderate: 0, improve: 0 };
+    var h = '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อนักเรียน</th><th>ชั้น</th><th>ห้อง</th>' +
+      '<th>สัปดาห์ 1</th><th>สัปดาห์ 2</th><th>สัปดาห์ 3</th><th>สัปดาห์ 4</th>' +
+      '<th>อัตราเข้าเรียน</th><th>หน้ารวม</th><th>ระดับ</th></tr></thead><tbody>';
+    var i = 1;
+    Object.keys(stuStats).forEach(function (k) {
+      var st = stuStats[k];
+      var attPct = Math.round((st.weeksPresent / 4) * 100);
+      var rating = App.evalRating(attPct);
+      if (rating.label === 'ดีมาก') summary.veryGood++;
+      else if (rating.label === 'ดี') summary.good++;
+      else if (rating.label === 'ปานกลาง') summary.moderate++;
+      else summary.improve++;
+      h += '<tr><td>' + i + '</td><td><strong>' + st.name + '</strong></td><td>' + (st.grade || '-') + '</td><td>' + (st.className || '-') + '</td>';
+      for (var wi = 0; wi < 4; wi++) {
+        var att = st.weeklyAtt[wi];
+        h += '<td>' + (att ? '<span class="badge badge-success">เข้า</span>' : '<span class="badge badge-danger">ไม่เข้า</span>') + '</td>';
+      }
+      h += '<td><strong>' + attPct + '%</strong></td>';
+      h += '<td>' + st.totalPages + '</td>';
+      h += '<td><span class="badge ' + rating.color + '">' + rating.icon + ' ' + rating.label + '</span></td></tr>';
+      i++;
     });
     h += '</tbody></table></div>';
+    h += '<div class="eval-summary" style="display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap">' +
+      '<div class="stat-card" style="flex:1;min-width:120px;text-align:center"><div class="stat-icon green" style="margin:0 auto">A</div><div class="stat-info"><h4>' + summary.veryGood + ' คน</h4><p style="color:#22c55e;font-weight:600">ดีมาก (≥80%)</p></div></div>' +
+      '<div class="stat-card" style="flex:1;min-width:120px;text-align:center"><div class="stat-icon blue" style="margin:0 auto">B</div><div class="stat-info"><h4>' + summary.good + ' คน</h4><p style="color:#3b82f6;font-weight:600">ดี (≥70%)</p></div></div>' +
+      '<div class="stat-card" style="flex:1;min-width:120px;text-align:center"><div class="stat-icon gold" style="margin:0 auto">C</div><div class="stat-info"><h4>' + summary.moderate + ' คน</h4><p style="color:#f59e0b;font-weight:600">ปานกลาง (≥50%)</p></div></div>' +
+      '<div class="stat-card" style="flex:1;min-width:120px;text-align:center"><div class="stat-icon red" style="margin:0 auto">D</div><div class="stat-info"><h4>' + summary.improve + ' คน</h4><p style="color:#ef4444;font-weight:600">ปรับปรุง (<50%)</p></div></div>' +
+      '</div>';
     el.innerHTML = h;
   },
 
