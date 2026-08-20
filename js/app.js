@@ -13,9 +13,15 @@
     const saved = localStorage.getItem('qiroati_user');
     if (saved) {
       try {
-        this.state.currentUser = JSON.parse(saved);
-        this.showApp();
-        this.navigateTo(this.state.currentView);
+        var user = JSON.parse(saved);
+        if (!user || !user.teacherId || user.role !== 'teacher') {
+          localStorage.removeItem('qiroati_user');
+          this.showLogin();
+        } else {
+          this.state.currentUser = user;
+          this.showApp();
+          this.navigateTo(this.state.currentView);
+        }
       } catch (e) {
         localStorage.removeItem('qiroati_user');
         this.showLogin();
