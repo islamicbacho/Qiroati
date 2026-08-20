@@ -14,7 +14,7 @@
     if (saved) {
       try {
         var user = JSON.parse(saved);
-        if (!user || !user.teacherId || user.role !== 'teacher') {
+        if (!user || (!user.teacherId && !user.id) || (user.role !== 'teacher' && user.role !== 'admin')) {
           localStorage.removeItem('qiroati_user');
           this.showLogin();
         } else {
@@ -104,10 +104,10 @@
     document.querySelectorAll('.user-display-name').forEach(el => el.textContent = u.name);
     document.querySelectorAll('.user-display-role').forEach(el => {
       const r = { admin: 'ผู้ดูแลระบบ', teacher: 'ครูผู้สอน' };
-      el.textContent = r[u.role] || 'ครูผู้สอน';
+      el.textContent = r[u.role] || u.role;
     });
     document.querySelectorAll('.user-avatar').forEach(el => { el.textContent = u.name.charAt(0); });
-    document.querySelectorAll('.admin-only').forEach(el => { el.style.display = ''; });
+    document.querySelectorAll('.admin-only').forEach(el => { el.style.display = u.role === 'admin' ? '' : 'none'; });
     document.querySelectorAll('.teacher-only').forEach(el => { el.style.display = ''; });
   },
   navigateTo(view) {
