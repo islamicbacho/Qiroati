@@ -677,25 +677,126 @@
     var students = [];
     try { var r = await API.getStudents(); if (r.success) students = r.students; } catch (e) {}
     var h = '<div class="section-header"><h2>รายงานนักเรียน</h2></div><div class="filter-bar"><select class="form-control" id="stuReportSelect" onchange="App.loadStudentReport()"><option value="">เลือกนักเรียน</option>';
-    students.forEach(function (s) { h += '<option value="' + s.id + '" data-class="' + s.classId + '">' + s.firstName + ' ' + s.lastName + ' (' + (s.className || '') + ')</option>'; });
+    students.forEach(function (s) { h += '<option value="' + s.id + '">' + s.firstName + ' ' + s.lastName + ' (' + (s.className || '') + ')</option>'; });
     h += '</select></div><div id="studentReportContent"></div>';
     c.innerHTML = h;
   },
+  loadStudentProfileImg(studentId) {
+    return localStorage.getItem('profile_' + studentId) || '';
+  },
+  saveStudentProfileImg(studentId, dataUrl) {
+    localStorage.setItem('profile_' + studentId, dataUrl);
+  },
+  uploadStudentProfile(studentId) {
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.onchange = function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        var img = new Image();
+        img.onload = function() {
+          var canvas = document.createElement('canvas');
+          var size = 200;
+          canvas.width = size; canvas.height = size;
+          var ctx = canvas.getContext('2d');
+          var min = Math.min(img.width, img.height);
+          var sx = (img.width - min) / 2, sy = (img.height - min) / 2;
+          ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+          var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          App.saveStudentProfileImg(studentId, dataUrl);
+          var el = document.getElementById('profileImg');
+          if (el) el.src = dataUrl;
+          App.showToast('success', 'บันทึกรูปโปรไฟล์แล้ว');
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    };
+    inp.click();
+  },
   async loadStudentReport() {
-    var sel = document.getElementById('stuReportSelect');
-    var sid = sel.value;
-    var cid = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].getAttribute('data-class') : '';
+    var sid = document.getElementById('stuReportSelect').value;
     var el = document.getElementById('studentReportContent');
     if (!sid) { el.innerHTML = ''; return; }
-    var stats = { totalPresent: 0, totalAbsent: 0, totalPages: 0, lastEval: null };
-    try { var r = await API.getStudentStats(sid, cid); if (r.success) stats = r.stats; } catch (e) {}
-    var eb = stats.lastEval ? App.statusBadge(stats.lastEval.result) : '<span class="badge badge-pending">ยังไม่ได้ประเมิน</span>';
-    el.innerHTML = '<div class="card-grid card-grid-3">' +
-      '<div class="stat-card"><div class="stat-icon green">ม</div><div class="stat-info"><h4>' + stats.totalPresent + '</h4><p>มาเรียน</p></div></div>' +
-      '<div class="stat-card"><div class="stat-icon coral">อ</div><div class="stat-info"><h4>' + stats.totalAbsent + '</h4><p>ไม่มา</p></div></div>' +
-      '<div class="stat-card"><div class="stat-icon gold">อ</div><div class="stat-info"><h4>' + stats.totalPages + '</h4><p>หน้าที่อ่าน</p></div></div>' +
-      '</div><div class="card mt-3"><div class="card-header"><h3>ผลประเมิน</h3>' + eb + '</div>' +
-      '<p class="text-muted">' + (stats.lastEval && stats.lastEval.suggestions ? stats.lastEval.suggestions : 'ยังไม่มีข้อเสนอแนะ') + '</p></div>';
+    el.innerHTML = '<div class="text-center mt-3"><span class="spinner"></span></div>';
+    var students = [], attendance = [], progress = [];
+    try {
+      var sr = await API.getStudents(); if (sr.success) students = sr.students;
+      var ar = await API.getAttendance({}); if (ar.success) attendance = ar.records;
+      var pr = await API.getWeeklyProgress({}); if (pr.success) progress = pr.records;
+    } catch (e) {}
+    var stu = null;
+    students.forEach(function(s) { if (s.id === sid) stu = s; });
+    if (!stu) { el.innerHTML = '<p class="text-muted">ไม่พบนักเรียน</p>'; return; }
+    var stuAtt = attendance.filter(function(r) { return r.studentId === sid; });
+    var stuWP = progress.filter(function(r) { return r.studentId === sid; });
+    var present = 0, absent = 0, late = 0;
+    stuAtt.forEach(function(r) {
+      if (r.status === 'present') present++;
+      else if (r.status === 'absent') absent++;
+      else if (r.status === 'late') late++;
+    });
+    var totalDays = present + absent + late;
+    var attPct = totalDays > 0 ? Math.round((present + late) / totalDays * 100) : 0;
+    var totalPages = 0, weeksWithReading = 0;
+    stuWP.forEach(function(p) {
+      totalPages += parseInt(p.pagesRead) || 0;
+      if (parseInt(p.pagesRead) > 0) weeksWithReading++;
+    });
+    var readPct = Math.round((totalPages / 44) * 100);
+    if (readPct > 100) readPct = 100;
+    var attRating = attPct >= 80 ? 'ดีมาก' : attPct >= 70 ? 'ดี' : attPct >= 50 ? 'ปานกลาง' : 'ปรับปรุง';
+    var attColor = attPct >= 80 ? '#22c55e' : attPct >= 70 ? '#3b82f6' : attPct >= 50 ? '#f59e0b' : '#ef4444';
+    var readRating = readPct >= 80 ? 'ดีมาก' : readPct >= 70 ? 'ดี' : readPct >= 50 ? 'ปานกลาง' : 'ปรับปรุง';
+    var readColor = readPct >= 80 ? '#22c55e' : readPct >= 70 ? '#3b82f6' : readPct >= 50 ? '#f59e0b' : '#ef4444';
+    var profileSrc = this.loadStudentProfileImg(sid);
+    var h = '<div style="max-width:800px;margin:0 auto">';
+    h += '<div style="background:linear-gradient(135deg,#1e3a5f,#2d5a87);border-radius:16px;padding:2rem;color:#fff;display:flex;align-items:center;gap:2rem;flex-wrap:wrap">';
+    h += '<div style="position:relative;cursor:pointer" onclick="App.uploadStudentProfile(\'' + sid + '\')" title="คลิกเพื่อเปลี่ยนรูป">';
+    h += '<img id="profileImg" src="' + (profileSrc || 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect fill="%23376591" width="120" height="120" rx="60"/><text x="60" y="68" text-anchor="middle" fill="%23fff" font-size="40" font-family="sans-serif">' + stu.firstName.charAt(0) + '</text></svg>') + '" style="width:120px;height:120px;border-radius:50%;border:4px solid rgba(255,255,255,0.3);object-fit:cover">';
+    h += '<div style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px">&#128247;</div>';
+    h += '</div>';
+    h += '<div><h2 style="margin:0;font-size:1.5rem">' + stu.firstName + ' ' + stu.lastName + '</h2>';
+    h += '<p style="margin:4px 0;opacity:0.8">ชั้น ' + (stu.grade || '-') + ' | ห้อง ' + (stu.className || '-') + ' | ครู ' + (stu.teacherName || '-') + '</p>';
+    h += '<p style="margin:4px 0;opacity:0.6;font-size:0.85rem">รหัส: ' + stu.id + '</p></div></div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-top:1.5rem">';
+    h += '<div class="stat-card"><div class="stat-info"><h4 style="color:' + attColor + '">' + attPct + '%</h4><p>อัตราเข้าเรียน</p><p style="font-size:0.75rem;color:' + attColor + '">' + attRating + '</p></div></div>';
+    h += '<div class="stat-card"><div class="stat-info"><h4>' + totalPages + ' หน้า</h4><p>อ่านรวมทั้งหมด</p><p style="font-size:0.75rem;color:' + readColor + '">' + readRating + '</p></div></div>';
+    h += '<div class="stat-card"><div class="stat-info"><h4>' + present + '</h4><p>มาเรียน</p></div></div>';
+    h += '<div class="stat-card"><div class="stat-info"><h4>' + absent + '</h4><p>ไม่มา</p></div></div>';
+    h += '<div class="stat-card"><div class="stat-info"><h4>' + late + '</h4><p>สาย</p></div></div>';
+    h += '</div>';
+    h += '<div class="card mt-3"><div class="card-header"><h3>ประวัติเข้าเรียน</h3></div>';
+    if (stuAtt.length === 0) {
+      h += '<p class="text-muted">ยังไม่มีประวัติเข้าเรียน</p>';
+    } else {
+      h += '<div class="table-wrap"><table><thead><tr><th>วันที่</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>';
+      stuAtt.sort(function(a,b) { return String(b.date).localeCompare(String(a.date)); });
+      stuAtt.forEach(function(r) {
+        var statusLabel = r.status === 'present' ? 'มา' : r.status === 'absent' ? 'ไม่มา' : 'สาย';
+        var statusColor = r.status === 'present' ? '#22c55e' : r.status === 'absent' ? '#ef4444' : '#f59e0b';
+        h += '<tr><td>' + (r.date || '-') + '</td><td style="color:' + statusColor + ';font-weight:600">' + statusLabel + '</td><td>' + (r.note || '-') + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '</div>';
+    h += '<div class="card mt-3"><div class="card-header"><h3>ประวัติการอ่าน</h3></div>';
+    if (stuWP.length === 0) {
+      h += '<p class="text-muted">ยังไม่มีประวัติการอ่าน</p>';
+    } else {
+      h += '<div class="table-wrap"><table><thead><tr><th>เดือน</th><th>สัปดาห์</th><th>หน้าที่อ่าน</th><th>ระดับ</th><th>หมายเหตุ</th></tr></thead><tbody>';
+      stuWP.sort(function(a,b) { return (String(a.year)+String(a.month)+String(a.weekNumber)).localeCompare(String(b.year)+String(b.month)+String(b.weekNumber)); });
+      stuWP.forEach(function(p) {
+        var lvl = p.readingLevel === 'advanced' ? 'ขั้นสูง' : p.readingLevel === 'intermediate' ? 'ปานกลาง' : p.readingLevel === 'beginner' ? 'เริ่มต้น' : '-';
+        h += '<tr><td>' + App.getMonthName(parseInt(p.month)) + ' ' + p.year + '</td><td>สัปดาห์ที่ ' + p.weekNumber + '</td><td><strong>' + (p.pagesRead || 0) + '</strong> / 44 หน้า</td><td>' + lvl + '</td><td>' + (p.note || '-') + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '</div></div>';
+    el.innerHTML = h;
   },
 
   // ==================== รายงานครู ====================
