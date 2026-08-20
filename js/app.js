@@ -12,9 +12,14 @@
   init() {
     const saved = localStorage.getItem('qiroati_user');
     if (saved) {
-      this.state.currentUser = JSON.parse(saved);
-      this.showApp();
-      this.navigateTo(this.state.currentView);
+      try {
+        this.state.currentUser = JSON.parse(saved);
+        this.showApp();
+        this.navigateTo(this.state.currentView);
+      } catch (e) {
+        localStorage.removeItem('qiroati_user');
+        this.showLogin();
+      }
     } else {
       this.showLogin();
     }
@@ -48,30 +53,20 @@
     this.updateUserInfo();
   },
   async handleLogin() {
-    const username = document.getElementById('loginUsername').value.trim();
+    const teacherId = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
     const btn = document.getElementById('loginBtn');
     const error = document.getElementById('loginError');
     error.classList.add('hidden');
-    if (!username || !password) {
-      error.textContent = 'กรุณากรอกข้อมูลให้ครบ';
+    if (!teacherId || !password) {
+      error.textContent = 'กรุณากรอกรหัสครูและรหัสผ่าน';
       error.classList.remove('hidden');
       return;
     }
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
-    if (username === 'Amir' && password === 'Admin') {
-      this.state.currentUser = { id: 'admin', username: 'Amir', name: 'Amir', role: 'admin', classId: '', className: '' };
-      localStorage.setItem('qiroati_user', JSON.stringify(this.state.currentUser));
-      this.showApp();
-      this.navigateTo('dashboard');
-      this.showToast('success', 'ยินดีต้อนรับ Amir');
-      btn.disabled = false;
-      btn.innerHTML = 'เข้าสู่ระบบ';
-      return;
-    }
     try {
-      const result = await API.login(username, password);
+      const result = await API.login(teacherId, password);
       if (result.success) {
         this.state.currentUser = result.user;
         localStorage.setItem('qiroati_user', JSON.stringify(result.user));
@@ -102,12 +97,12 @@
     if (!u) return;
     document.querySelectorAll('.user-display-name').forEach(el => el.textContent = u.name);
     document.querySelectorAll('.user-display-role').forEach(el => {
-      const r = { admin: 'ผู้ดูแลระบบ', teacher: 'ครู', student: 'นักเรียน' };
-      el.textContent = r[u.role] || u.role;
+      const r = { admin: 'ผู้ดูแลระบบ', teacher: 'ครูผู้สอน' };
+      el.textContent = r[u.role] || 'ครูผู้สอน';
     });
     document.querySelectorAll('.user-avatar').forEach(el => { el.textContent = u.name.charAt(0); });
-    document.querySelectorAll('.admin-only').forEach(el => { el.style.display = u.role === 'admin' ? '' : 'none'; });
-    document.querySelectorAll('.teacher-only').forEach(el => { el.style.display = (u.role === 'teacher' || u.role === 'admin') ? '' : 'none'; });
+    document.querySelectorAll('.admin-only').forEach(el => { el.style.display = ''; });
+    document.querySelectorAll('.teacher-only').forEach(el => { el.style.display = ''; });
   },
   navigateTo(view) {
     this.state.currentView = view;
@@ -562,15 +557,35 @@
 
   // ==================== จัดการครู ====================
   async renderTeachers(c) {
-    var teachers = [];
-    try { var r = await API.getTeachers(); if (r.success) teachers = r.teachers; } catch (e) {}
-    var h = '<div class="section-header"><h2>จัดการครู</h2><div class="actions"><button class="btn btn-primary btn-sm" onclick="App.showAddTeacherModal()">+ เพิ่มครู</button></div></div>';
+    var teachers = [], users = [];
+    try {
+      var r = await API.getTeachers(); if (r.success) teachers = r.teachers;
+      var ur = await API.getUsers(); if (ur.success) users = ur.users;
+    } catch (e) {}
+    var userMap = {};
+    users.forEach(function(u) { userMap[u.name] = u; });
+    var h = '<div class="section-header"><h2>จัดการครู</h2><div class="actions">' +
+      '<button class="btn btn-primary btn-sm" onclick="App.showAddTeacherModal()">+ เพิ่มครู</button> ' +
+      '<button class="btn btn-ghost btn-sm" onclick="App.syncTeachers()">ซิงค์ครูอัตโนมัติ</button>' +
+      '</div></div>';
     if (teachers.length === 0) h += '<div class="empty-state"><h3>ยังไม่มีครู</h3></div>';
     else {
-      h += '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อ</th><th>รหัส</th><th>โทรศัพท์</th><th>ความเชี่ยวชาญ</th><th>สถานะ</th><th>การดำเนินการ</th></tr></thead><tbody>';
+      h += '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อ</th><th>รหัสครู</th><th>รหัสผ่าน</th><th>ห้องเรียน</th><th>สถานะ</th><th>การดำเนินการ</th></tr></thead><tbody>';
       teachers.forEach(function (t, i) {
-        h += '<tr><td>' + (i + 1) + '</td><td><strong>' + t.name + '</strong></td><td class="text-xs">' + t.id + '</td><td>' + (t.phone || '-') + '</td><td>' + (t.specialty || '-') + '</td><td>' + App.statusBadge(t.status) + '</td>';
-        h += '<td><button class="btn btn-sm btn-ghost" onclick="App.editTeacher(\'' + t.id + '\')">แก้ไข</button> <button class="btn btn-sm btn-danger" onclick="App.deleteTeacher(\'' + t.id + '\')">ลบ</button></td></tr>';
+        var u = userMap[t.name];
+        var tid = u ? u.teacherId : '<span style="color:#ef4444">ไม่มีบัญชี</span>';
+        var pass = u ? u.password : '-';
+        h += '<tr><td>' + (i + 1) + '</td><td><strong>' + t.name + '</strong></td>';
+        h += '<td class="text-xs" style="font-weight:600;color:#3b82f6">' + tid + '</td>';
+        h += '<td class="text-xs">' + pass + '</td>';
+        h += '<td>' + (t.assignedClasses || []).join(', ') + '</td>';
+        h += '<td>' + App.statusBadge(u ? u.status : 'active') + '</td>';
+        if (u) {
+          h += '<td><button class="btn btn-sm btn-ghost" onclick="App.resetTeacherPass(\'' + u.teacherId + '\')">รีเซ็ตรหัสผ่าน</button></td>';
+        } else {
+          h += '<td><button class="btn btn-sm btn-primary" onclick="App.createTeacherAccount(\'' + t.name + '\')">สร้างบัญชี</button></td>';
+        }
+        h += '</tr>';
       });
       h += '</tbody></table></div>';
     }
@@ -580,25 +595,50 @@
   showAddTeacherModal() {
     this.showModal('เพิ่มครู', '<form onsubmit="App.addTeacher(event)">' +
       '<div class="form-group"><label>ชื่อ-นามสกุล</label><input type="text" class="form-control" id="newTchName" required></div>' +
-      '<div class="form-group"><label>โทรศัพท์</label><input type="text" class="form-control" id="newTchPhone"></div>' +
-      '<div class="form-group"><label>ความเชี่ยวชาญ</label><input type="text" class="form-control" id="newTchSpecialty"></div>' +
+      '<div class="form-group"><label>รหัสผ่าน</label><input type="text" class="form-control" id="newTchPass" placeholder="เว้นว่างเพื่อใช้รหัสครูเป็นรหัสผ่าน"></div>' +
       '<div class="flex gap-1 mt-2"><button type="submit" class="btn btn-primary">บันทึก</button><button type="button" class="btn btn-ghost" onclick="App.closeModal()">ยกเลิก</button></div></form>');
   },
   async addTeacher(e) {
     e.preventDefault();
-    var r = await API.addTeacher({
-      name: document.getElementById('newTchName').value,
-      phone: document.getElementById('newTchPhone').value,
-      specialty: document.getElementById('newTchSpecialty').value
-    });
-    if (r.success) { this.closeModal(); this.showToast('success', r.message); this.renderTeachers(document.getElementById('contentArea')); }
-    else this.showToast('error', r.message);
+    var name = document.getElementById('newTchName').value.trim();
+    var pass = document.getElementById('newTchPass').value.trim();
+    var r = await API.createUser({ name: name, password: pass || undefined });
+    if (r.success) {
+      this.closeModal();
+      this.showToast('success', 'สร้างบัญชี ' + r.teacherId + ' สำเร็จ | รหัสผ่าน: ' + r.password);
+      this.renderTeachers(document.getElementById('contentArea'));
+    } else {
+      this.showToast('error', r.message);
+    }
   },
-  async deleteTeacher(id) {
-    if (!confirm('ต้องการลบครูคนนี้ใช่หรือไม่?')) return;
-    var r = await API.deleteTeacher(id);
-    if (r.success) { this.showToast('success', r.message); this.renderTeachers(document.getElementById('contentArea')); }
-    else this.showToast('error', r.message);
+  async createTeacherAccount(name) {
+    var r = await API.createUser({ name: name });
+    if (r.success) {
+      this.showToast('success', 'สร้างบัญชี ' + r.teacherId + ' สำเร็จ | รหัสผ่าน: ' + r.password);
+      this.renderTeachers(document.getElementById('contentArea'));
+    } else {
+      this.showToast('error', r.message);
+    }
+  },
+  async syncTeachers() {
+    var r = await API.syncTeachersToUsers();
+    if (r.success) {
+      this.showToast('success', r.message);
+      this.renderTeachers(document.getElementById('contentArea'));
+    } else {
+      this.showToast('error', r.message);
+    }
+  },
+
+  async resetTeacherPass(teacherId) {
+    if (!confirm('ต้องการรีเซ็ตรหัสผ่านของ ' + teacherId + ' ใช่หรือไม่? รหัสผ่านใหม่จะเป็นรหัสครูเดียวกัน')) return;
+    var r = await API.resetPassword({ teacherId: teacherId, newPassword: teacherId });
+    if (r.success) {
+      this.showToast('success', r.message);
+      this.renderTeachers(document.getElementById('contentArea'));
+    } else {
+      this.showToast('error', r.message);
+    }
   },
 
   // ==================== จัดการห้องเรียน ====================

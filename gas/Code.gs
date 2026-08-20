@@ -6,12 +6,13 @@
 const SS_ID = '1UlV6FlOdqH9SxcL5h1K1Z4cPuC6Fo9NquMamida24a0';
 const DRIVE_FOLDER_ID = '_kclDx6Pcf5DBVwIKsA1IlHMVMJg9Yz';
 const STUDENT_SHEET = 'รายชื่อ';
+const USERS_SHEET = 'Users';
 const DATA_START_ROW = 8;
 
 function doGet(e) {
   try {
     if (e.parameter && e.parameter.action) {
-      const data = {};
+      var data = {};
       Object.keys(e.parameter).forEach(function(key) {
         if (key !== 'action') {
           try { data[key] = JSON.parse(e.parameter[key]); } catch(ex) { data[key] = e.parameter[key]; }
@@ -32,7 +33,7 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    const data = JSON.parse(e.postData.contents);
+    var data = JSON.parse(e.postData.contents);
     return routeAction(data.action, data);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
@@ -54,74 +55,183 @@ function routeAction(action, data) {
     case 'getWeeklyProgress': result = getWeeklyProgress(data); break;
     case 'saveWeeklyProgress': result = saveWeeklyProgress(data); break;
     case 'getMonthlyReports': result = getMonthlyReports(data); break;
-    case 'generatePDF': result = generatePDF(data); break;
-    case 'generateAllPDFs': result = generateAllPDFs(data); break;
     case 'getDashboardStats': result = getDashboardStats(data); break;
     case 'getStudentStats': result = getStudentStats(data); break;
     case 'getNotifications': result = getNotifications(data); break;
     case 'sendNotification': result = sendNotification(data); break;
+    case 'getUsers': result = getUsers(data); break;
+    case 'createUser': result = createUser(data); break;
+    case 'resetPassword': result = resetPassword(data); break;
     default: result = { success: false, message: 'ไม่รู้จัก action: ' + action };
   }
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ==================== ดึงข้อมูลนักเรียนจากชีท ====================
+// ==================== USERS SHEET ====================
+
+function getUsersSheet() {
+  var ss = SpreadsheetApp.openById(SS_ID);
+  var sheet = ss.getSheetByName(USERS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(USERS_SHEET);
+    sheet.appendRow(['TeacherID', 'Password', 'Name', 'Phone', 'Status']);
+    sheet.getRange('A1:E1').setFontWeight('bold').setBackground('#1e3a5f').setFontColor('#ffffff');
+    sheet.setColumnWidths(1, 5, 150);
+  }
+  return sheet;
+}
+
+function getUsers(data) {
+  var sheet = getUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, users: [] };
+  var rows = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+  var users = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    users.push({
+      teacherId: String(r[0] || '').trim(),
+      password: String(r[1] || '').trim(),
+      name: String(r[2] || '').trim(),
+      phone: String(r[3] || '').trim(),
+      status: String(r[4] || 'active').trim()
+    });
+  }
+  return { success: true, users: users };
+}
+
+function generateTeacherId() {
+  var sheet = getUsersSheet();
+  var lastRow = sheet.getLastRow();
+  var maxNum = 0;
+  if (lastRow >= 2) {
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      var id = String(ids[i][0] || '').trim();
+      var match = id.match(/^TCR(\d+)$/);
+      if (match) {
+        var num = parseInt(match[1]);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+  }
+  return 'TCR' + String(maxNum + 1).padStart(3, '0');
+}
+
+function createUser(data) {
+  var sheet = getUsersSheet();
+  var teacherId = generateTeacherId();
+  var password = data.password || teacherId;
+  sheet.appendRow([
+    teacherId,
+    password,
+    data.name || '',
+    data.phone || '',
+    'active'
+  ]);
+  return { success: true, teacherId: teacherId, password: password, message: 'สร้างบัญชี ' + teacherId + ' สำเร็จ' };
+}
+
+function resetPassword(data) {
+  var sheet = getUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: 'ไม่พบผู้ใช้' };
+  var rows = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === data.teacherId) {
+      var newPass = data.newPassword || String(rows[i][0]).trim();
+      sheet.getRange(i + 2, 2).setValue(newPass);
+      return { success: true, message: 'รีเซ็ตรหัสผ่าน ' + data.teacherId + ' สำเร็จ รหัสใหม่: ' + newPass };
+    }
+  }
+  return { success: false, message: 'ไม่พบผู้ใช้: ' + data.teacherId };
+}
+
+function syncTeachersToUsers() {
+  var students = getStudentSheetData();
+  var teacherMap = {};
+  students.forEach(function(s) {
+    if (s.teacherName && !teacherMap[s.teacherName]) {
+      teacherMap[s.teacherName] = true;
+    }
+  });
+  var existing = getUsers({});
+  var existingNames = {};
+  existing.users.forEach(function(u) { existingNames[u.name] = u.teacherId; });
+  var sheet = getUsersSheet();
+  var added = 0;
+  Object.keys(teacherMap).forEach(function(name) {
+    if (!existingNames[name]) {
+      var teacherId = generateTeacherId();
+      sheet.appendRow([teacherId, teacherId, name, '', 'active']);
+      added++;
+    }
+  });
+  return { success: true, added: added, message: 'เพิ่มครูใหม่ ' + added + ' คน' };
+}
+
+// ==================== AUTH ====================
+
+function handleLogin(data) {
+  var teacherId = String(data.teacherId || '').trim();
+  var password = String(data.password || '').trim();
+  if (!teacherId || !password) {
+    return { success: false, message: 'กรุณากรอกรหัสครูและรหัสผ่าน' };
+  }
+  var sheet = getUsersSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: 'ยังไม่มีผู้ใช้ในระบบ กรุณาเพิ่มครูก่อน' };
+  var rows = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    var uId = String(rows[i][0] || '').trim();
+    var uPass = String(rows[i][1] || '').trim();
+    var uName = String(rows[i][2] || '').trim();
+    var uStatus = String(rows[i][4] || 'active').trim();
+    if (uId === teacherId && uPass === password) {
+      if (uStatus !== 'active') {
+        return { success: false, message: 'บัญชีนี้ถูกปิดใช้งาน' };
+      }
+      return {
+        success: true,
+        user: {
+          id: uId, teacherId: uId, username: uId,
+          name: uName, role: 'teacher',
+          classId: '', className: ''
+        }
+      };
+    }
+  }
+  return { success: false, message: 'รหัสครูหรือรหัสผ่านไม่ถูกต้อง' };
+}
+
+// ==================== STUDENT DATA ====================
 
 function getStudentSheetData() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const sheet = ss.getSheetByName(STUDENT_SHEET);
+  var ss = SpreadsheetApp.openById(SS_ID);
+  var sheet = ss.getSheetByName(STUDENT_SHEET);
   if (!sheet) return [];
-  const lastRow = sheet.getLastRow();
+  var lastRow = sheet.getLastRow();
   if (lastRow < DATA_START_ROW) return [];
-  const range = sheet.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, 6);
-  const rows = range.getValues();
+  var range = sheet.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, 6);
+  var rows = range.getValues();
   var students = [];
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
     var name = String(row[1] || '').trim();
     var lastname = String(row[2] || '').trim();
     if (!name) continue;
-    var teacherName = String(row[5] || '').trim();
-    var className = String(row[4] || '').trim();
-    var grade = String(row[3] || '').trim();
     students.push({
       id: String(row[0] || '').trim() || ('STU' + (10000 + i)),
       firstName: name,
       lastName: lastname,
-      grade: grade,
-      className: className,
-      teacherName: teacherName,
+      grade: String(row[3] || '').trim(),
+      className: String(row[4] || '').trim(),
+      teacherName: String(row[5] || '').trim(),
       status: 'active'
     });
   }
   return students;
-}
-
-// ==================== AUTH ====================
-
-function handleLogin(data) {
-  const { username, password } = data;
-  if (username === 'Amir' && password === 'Admin') {
-    return {
-      success: true,
-      user: { id: 'admin', username: 'Amir', name: 'Amir', role: 'admin', classId: '', className: '' }
-    };
-  }
-  var students = getStudentSheetData();
-  for (var i = 0; i < students.length; i++) {
-    if (students[i].firstName === username || students[i].id === username) {
-      return {
-        success: true,
-        user: {
-          id: students[i].id, username: students[i].id,
-          name: students[i].firstName + ' ' + students[i].lastName,
-          role: 'student', classId: students[i].className, className: students[i].className
-        }
-      };
-    }
-  }
-  return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
 }
 
 // ==================== STUDENTS ====================
@@ -148,17 +258,23 @@ function getStudentsByClass(data) {
 
 function getTeachers(data) {
   var students = getStudentSheetData();
+  var users = getUsers({});
+  var userMap = {};
+  users.users.forEach(function(u) { userMap[u.name] = u; });
+
   var teacherMap = {};
   students.forEach(function(s) {
     if (!s.teacherName) return;
     if (!teacherMap[s.teacherName]) {
+      var user = userMap[s.teacherName];
       teacherMap[s.teacherName] = {
         id: s.teacherName,
+        teacherId: user ? user.teacherId : '',
         name: s.teacherName,
-        phone: '',
+        phone: user ? user.phone : '',
         specialty: '',
         assignedClasses: [],
-        status: 'active'
+        status: user ? user.status : 'active'
       };
     }
     if (s.className && teacherMap[s.teacherName].assignedClasses.indexOf(s.className) === -1) {
@@ -202,7 +318,7 @@ function getClasses(data) {
 // ==================== ATTENDANCE ====================
 
 function getAttendance(data) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  var ss = SpreadsheetApp.openById(SS_ID);
   var sheet = ss.getSheetByName('Attendance');
   if (!sheet) return { success: true, records: [] };
   var lastRow = sheet.getLastRow();
@@ -223,7 +339,7 @@ function getAttendance(data) {
 }
 
 function saveAttendance(data) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  var ss = SpreadsheetApp.openById(SS_ID);
   var sheet = ss.getSheetByName('Attendance');
   if (!sheet) {
     sheet = ss.insertSheet('Attendance');
@@ -246,7 +362,7 @@ function saveAttendance(data) {
 // ==================== WEEKLY PROGRESS ====================
 
 function getWeeklyProgress(data) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  var ss = SpreadsheetApp.openById(SS_ID);
   var sheet = ss.getSheetByName('WeeklyProgress');
   if (!sheet) return { success: true, records: [] };
   var lastRow = sheet.getLastRow();
@@ -271,7 +387,7 @@ function getWeeklyProgress(data) {
 }
 
 function saveWeeklyProgress(data) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  var ss = SpreadsheetApp.openById(SS_ID);
   var sheet = ss.getSheetByName('WeeklyProgress');
   if (!sheet) {
     sheet = ss.insertSheet('WeeklyProgress');
@@ -294,7 +410,7 @@ function saveWeeklyProgress(data) {
 // ==================== MONTHLY REPORTS ====================
 
 function getMonthlyReports(data) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  var ss = SpreadsheetApp.openById(SS_ID);
   var sheet = ss.getSheetByName('MonthlyReports');
   if (!sheet) return { success: true, reports: [] };
   var lastRow = sheet.getLastRow();
@@ -337,15 +453,6 @@ function getDashboardStats(data) {
     });
   } catch(e) {}
 
-  var pendingReports = 0, approvedReports = 0;
-  try {
-    var rpResult = getMonthlyReports();
-    rpResult.reports.forEach(function(r) {
-      if (r.status === 'pending') pendingReports++;
-      if (r.status === 'approved') approvedReports++;
-    });
-  } catch(e) {}
-
   return {
     success: true,
     stats: {
@@ -354,8 +461,8 @@ function getDashboardStats(data) {
       totalTeachers: totalTeachers,
       todayPresent: todayPresent,
       todayAbsent: todayAbsent,
-      pendingReports: pendingReports,
-      approvedReports: approvedReports,
+      pendingReports: 0,
+      approvedReports: 0,
       passed: 0,
       needsImprovement: 0
     }
@@ -368,7 +475,6 @@ function getStudentStats(data) {
   var studentId = data.studentId || '';
   var classId = data.classId || '';
   var totalPresent = 0, totalAbsent = 0, totalPages = 0;
-  var lastEval = null;
   try {
     var attResult = getAttendance({ classId: classId });
     attResult.records.forEach(function(r) {
@@ -386,19 +492,14 @@ function getStudentStats(data) {
   } catch(e) {}
   return {
     success: true,
-    stats: {
-      totalPresent: totalPresent,
-      totalAbsent: totalAbsent,
-      totalPages: totalPages,
-      lastEval: lastEval
-    }
+    stats: { totalPresent: totalPresent, totalAbsent: totalAbsent, totalPages: totalPages, lastEval: null }
   };
 }
 
 // ==================== NOTIFICATIONS ====================
 
 function getNotifications(data) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  var ss = SpreadsheetApp.openById(SS_ID);
   var sheet = ss.getSheetByName('Notifications');
   if (!sheet) return { success: true, notifications: [] };
   var lastRow = sheet.getLastRow();
@@ -416,7 +517,7 @@ function getNotifications(data) {
 }
 
 function sendNotification(data) {
-  const ss = SpreadsheetApp.openById(SS_ID);
+  var ss = SpreadsheetApp.openById(SS_ID);
   var sheet = ss.getSheetByName('Notifications');
   if (!sheet) {
     sheet = ss.insertSheet('Notifications');
@@ -430,14 +531,4 @@ function sendNotification(data) {
     false, now.toISOString()
   ]);
   return { success: true, message: 'ส่งแจ้งเตือนแล้ว' };
-}
-
-// ==================== PDF ====================
-
-function generatePDF(data) {
-  return { success: true, message: 'สร้าง PDF สำเร็จ (ฟีเจอร์นี้จะพัฒนาต่อ)' };
-}
-
-function generateAllPDFs(data) {
-  return { success: true, message: 'สร้าง PDF ทั้งหมดสำเร็จ (ฟีเจอร์นี้จะพัฒนาต่อ)' };
 }

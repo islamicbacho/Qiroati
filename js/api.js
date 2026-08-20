@@ -49,7 +49,7 @@ const API = {
   },
 
   // === Auth ===
-  login: (username, password) => API.call('login', { username, password }),
+  login: (teacherId, password) => API.call('login', { teacherId, password }),
 
   // === Students ===
   getStudents: (filters) => API.call('getStudents', filters || {}),
@@ -100,6 +100,11 @@ const API = {
   generatePDF: (data) => API.call('generatePDF', data),
   generateAllPDFs: (data) => API.call('generateAllPDFs', data),
 
+  // === Users ===
+  getUsers: () => API.call('getUsers'),
+  createUser: (data) => API.call('createUser', data),
+  resetPassword: (data) => API.call('resetPassword', data),
+
   // === Init ===
-  initSheets: () => API.call('initSheets'),
+  syncTeachersToUsers: () => API.call('syncTeachersToUsers'),
 };
