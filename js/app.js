@@ -387,16 +387,18 @@
       '<div id="evalContent"></div>';
     c.innerHTML = h;
   },
-  evalRating(pct) {
-    if (pct >= 80) return { label: 'ดีมาก', color: 'badge-success', icon: 'A' };
-    if (pct >= 70) return { label: 'ดี', color: 'badge-info', icon: 'B' };
-    if (pct >= 50) return { label: 'ปานกลาง', color: 'badge-warning', icon: 'C' };
+  evalRating(attPct, readPct) {
+    var avg = (attPct + readPct) / 2;
+    if (attPct >= 80 && readPct >= 80) return { label: 'ดีมาก', color: 'badge-success', icon: 'A' };
+    if (attPct >= 70 && readPct >= 70) return { label: 'ดี', color: 'badge-info', icon: 'B' };
+    if (avg >= 50) return { label: 'ปานกลาง', color: 'badge-warning', icon: 'C' };
     return { label: 'ปรับปรุง', color: 'badge-danger', icon: 'D' };
   },
   async loadEvaluation() {
     var teacherId = document.getElementById('evalTeacher').value;
     var yr = document.getElementById('evalYear').value;
     var mo = document.getElementById('evalMonth').value;
+    var moName = this.getMonthName(parseInt(mo));
     var el = document.getElementById('evalContent');
     if (!teacherId) { el.innerHTML = '<p class="text-muted">กรุณาเลือกครูผู้สอน</p>'; return; }
     var students = [], week1 = [], week2 = [], week3 = [], week4 = [];
@@ -410,12 +412,14 @@
     var weeks = [week1, week2, week3, week4];
     var stuStats = {};
     students.forEach(function (s) {
-      stuStats[s.id] = { name: s.firstName + ' ' + s.lastName, grade: s.grade, className: s.className, totalPages: 0, weeksPresent: 0, weeklyAtt: [0, 0, 0, 0] };
+      stuStats[s.id] = { name: s.firstName + ' ' + s.lastName, grade: s.grade, className: s.className, totalPages: 0, weeksPresent: 0, weeklyAtt: [0, 0, 0, 0], weeklyPages: [0, 0, 0, 0] };
     });
     weeks.forEach(function (wk, wi) {
       wk.forEach(function (p) {
         if (!stuStats[p.studentId]) return;
-        stuStats[p.studentId].totalPages += parseInt(p.pagesRead) || 0;
+        var pg = parseInt(p.pagesRead) || 0;
+        stuStats[p.studentId].totalPages += pg;
+        stuStats[p.studentId].weeklyPages[wi] = pg;
         var att = parseInt(p.attendanceCount) || 0;
         if (att > 0) { stuStats[p.studentId].weeksPresent++; stuStats[p.studentId].weeklyAtt[wi] = 1; }
       });
@@ -424,25 +428,35 @@
     Object.keys(stuStats).forEach(function(k) { if (stuStats[k].totalPages > 0 || stuStats[k].weeksPresent > 0) hasData = true; });
     if (!hasData) { el.innerHTML = '<div class="empty-state"><h3>ยังไม่มีข้อมูลในเดือนนี้</h3><p>กรุณาบันทึกข้อมูลรายสัปดาห์ก่อน</p></div>'; return; }
     var summary = { veryGood: 0, good: 0, moderate: 0, improve: 0 };
-    var h = '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อนักเรียน</th><th>ชั้น</th><th>ห้อง</th>' +
-      '<th>สัปดาห์ 1</th><th>สัปดาห์ 2</th><th>สัปดาห์ 3</th><th>สัปดาห์ 4</th>' +
-      '<th>อัตราเข้าเรียน</th><th>หน้ารวม</th><th>ระดับ</th></tr></thead><tbody>';
+    var h = '<button class="btn btn-success btn-sm" onclick="App.printEvalPDF()" style="margin-bottom:1rem">พิมพ์ PDF</button>';
+    h += '<div id="evalPrintArea"><div style="margin-bottom:1rem"><strong>ครูผู้สอน:</strong> ' + teacherId + ' &nbsp;&nbsp; <strong>เดือน:</strong> ' + moName + ' ' + yr + '</div>';
+    h += '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อนักเรียน</th><th>ชั้น</th>' +
+      '<th>เข้า สป.1</th><th>เข้า สป.2</th><th>เข้า สป.3</th><th>เข้า สป.4</th><th>%</th>' +
+      '<th>อ่าน สป.1</th><th>อ่าน สป.2</th><th>อ่าน สป.3</th><th>อ่าน สป.4</th><th>หน้ารวม</th><th>%</th>' +
+      '<th>ผลลัพธ์</th></tr></thead><tbody>';
     var i = 1;
     Object.keys(stuStats).forEach(function (k) {
       var st = stuStats[k];
       var attPct = Math.round((st.weeksPresent / 4) * 100);
-      var rating = App.evalRating(attPct);
+      var readPct = Math.round((st.totalPages / 44) * 100);
+      if (readPct > 100) readPct = 100;
+      var rating = App.evalRating(attPct, readPct);
       if (rating.label === 'ดีมาก') summary.veryGood++;
       else if (rating.label === 'ดี') summary.good++;
       else if (rating.label === 'ปานกลาง') summary.moderate++;
       else summary.improve++;
-      h += '<tr><td>' + i + '</td><td><strong>' + st.name + '</strong></td><td>' + (st.grade || '-') + '</td><td>' + (st.className || '-') + '</td>';
+      h += '<tr><td>' + i + '</td><td><strong>' + st.name + '</strong></td><td>' + (st.grade || '-') + '</td>';
       for (var wi = 0; wi < 4; wi++) {
-        var att = st.weeklyAtt[wi];
-        h += '<td>' + (att ? '<span class="badge badge-success">เข้า</span>' : '<span class="badge badge-danger">ไม่เข้า</span>') + '</td>';
+        h += '<td>' + (st.weeklyAtt[wi] ? '<span class="badge badge-success">เข้า</span>' : '<span class="badge badge-danger">-</span>') + '</td>';
       }
-      h += '<td><strong>' + attPct + '%</strong></td>';
-      h += '<td>' + st.totalPages + '</td>';
+      var attColor = attPct >= 80 ? 'color:#22c55e' : attPct >= 50 ? 'color:#f59e0b' : 'color:#ef4444';
+      h += '<td style="' + attColor + ';font-weight:700">' + attPct + '%</td>';
+      for (var wi = 0; wi < 4; wi++) {
+        var pg = st.weeklyPages[wi];
+        h += '<td>' + (pg > 0 ? pg : '<span class="text-muted">-</span>') + '</td>';
+      }
+      var readColor = readPct >= 80 ? 'color:#22c55e' : readPct >= 50 ? 'color:#f59e0b' : 'color:#ef4444';
+      h += '<td>' + st.totalPages + '</td><td style="' + readColor + ';font-weight:700">' + readPct + '%</td>';
       h += '<td><span class="badge ' + rating.color + '">' + rating.icon + ' ' + rating.label + '</span></td></tr>';
       i++;
     });
@@ -452,8 +466,31 @@
       '<div class="stat-card" style="flex:1;min-width:120px;text-align:center"><div class="stat-icon blue" style="margin:0 auto">B</div><div class="stat-info"><h4>' + summary.good + ' คน</h4><p style="color:#3b82f6;font-weight:600">ดี (≥70%)</p></div></div>' +
       '<div class="stat-card" style="flex:1;min-width:120px;text-align:center"><div class="stat-icon gold" style="margin:0 auto">C</div><div class="stat-info"><h4>' + summary.moderate + ' คน</h4><p style="color:#f59e0b;font-weight:600">ปานกลาง (≥50%)</p></div></div>' +
       '<div class="stat-card" style="flex:1;min-width:120px;text-align:center"><div class="stat-icon red" style="margin:0 auto">D</div><div class="stat-info"><h4>' + summary.improve + ' คน</h4><p style="color:#ef4444;font-weight:600">ปรับปรุง (<50%)</p></div></div>' +
-      '</div>';
+      '</div></div>';
     el.innerHTML = h;
+  },
+  printEvalPDF() {
+    var area = document.getElementById('evalPrintArea');
+    if (!area) return;
+    var teacherId = document.getElementById('evalTeacher').value;
+    var yr = document.getElementById('evalYear').value;
+    var mo = document.getElementById('evalMonth').value;
+    var moName = this.getMonthName(parseInt(mo));
+    var w = window.open('', '_blank');
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>รายงานประเมินนักเรียน</title>');
+    w.document.write('<style>body{font-family:sans-serif;padding:2rem;font-size:13px}table{width:100%;border-collapse:collapse;margin-top:1rem}th,td{border:1px solid #333;padding:6px 8px;text-align:center;font-size:12px}th{background:#1e3a5f;color:#fff;font-weight:600}.badge-success{background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px}.badge-info{background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px}.badge-warning{background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px}.badge-danger{background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px}h1{font-size:18px;margin-bottom:4px}h2{font-size:14px;color:#666;margin-bottom:1rem}.summary{display:flex;gap:1rem;margin-top:1.5rem}.summary-card{flex:1;text-align:center;padding:0.8rem;border:1px solid #ccc;border-radius:8px}.summary-card h3{margin:0;font-size:22px}.summary-card p{margin:4px 0 0;font-size:12px;font-weight:600}</style>');
+    w.document.write('</head><body>');
+    w.document.write('<h1>รายงานประเมินแนวโน้มนักเรียน</h1>');
+    w.document.write('<h2>ครูผู้สอน: ' + teacherId + ' | เดือน ' + moName + ' ' + yr + '</h2>');
+    w.document.write(area.innerHTML);
+    w.document.write('<div class="summary">');
+    var sc = area.querySelectorAll('.stat-card');
+    for (var i = 0; i < sc.length; i++) { w.document.write(sc[i].outerHTML); }
+    w.document.write('</div>');
+    w.document.write('<div style="margin-top:3rem;display:flex;gap:4rem"><div>ลงชื่อ _____________________<br>ครูผู้สอน</div><div>ลงชื่อ _____________________<br>ผู้อำนวยการ</div></div>');
+    w.document.write('</body></html>');
+    w.document.close();
+    setTimeout(function() { w.print(); }, 500);
   },
 
   // ==================== จัดการนักเรียน ====================
