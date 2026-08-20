@@ -246,7 +246,7 @@
           '<option value="late">สาย</option>' +
           '</select></td>' +
           '<td><input type="number" class="form-control wp-pages" data-id="' + s.id + '" data-name="' + s.firstName + ' ' + s.lastName + '" value="0" min="0" style="width:70px"></td>' +
-          '<td><input type="number" class="form-control wp-total" data-id="' + s.id + '" value="0" min="0" style="width:70px"></td>' +
+          '<td><input type="number" class="form-control" value="44" readonly style="width:70px;background:#f0f0f0;cursor:not-allowed"></td>' +
           '<td><select class="form-control wp-level" data-id="' + s.id + '" style="width:90px">' +
           '<option value="">-</option>' +
           '<option value="beginner">เริ่มต้น</option>' +
@@ -277,13 +277,12 @@
     document.querySelectorAll('.wp-pages').forEach(function(inp) {
       var id = inp.dataset.id;
       var nm = inp.dataset.name;
-      var tot = document.querySelector('.wp-total[data-id="' + id + '"]');
       var lvl = document.querySelector('.wp-level[data-id="' + id + '"]');
       var note = document.querySelector('.wp-note[data-id="' + id + '"]');
       wpRecords.push({
         studentId: id, studentName: nm,
         pagesRead: parseInt(inp.value) || 0,
-        totalPages: tot ? parseInt(tot.value) || 0 : 0,
+        totalPages: 44,
         readingLevel: lvl ? lvl.value : '',
         attendanceCount: 1,
         note: note ? note.value : ''
