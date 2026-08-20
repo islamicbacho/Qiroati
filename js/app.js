@@ -116,8 +116,8 @@
       dashboard: 'แดชบอร์ด', classroom: 'ห้องเรียน', attendance: 'ลงเวลาเข้าเรียน',
       weekly: 'ความคืบหน้ารายสัปดาห์', monthly: 'รายงานรายเดือน', evaluation: 'การประเมิน',
       students: 'นักเรียน', teachers: 'ครู', classes: 'ห้องเรียน',
-      reports: 'รายงานทั้งหมด', notifications: 'แจ้งเตือน',
-      studentDetail: 'รายงานนักเรียน', teacherDetail: 'รายงานครู'
+      notifications: 'แจ้งเตือน',
+      studentDetail: 'รายงานนักเรียน'
     };
     document.getElementById('pageTitle').textContent = titles[view] || view;
     this.renderView(view, document.getElementById('contentArea'));
@@ -132,10 +132,8 @@
       case 'students': await this.renderStudents(c); break;
       case 'teachers': await this.renderTeachers(c); break;
       case 'classes': await this.renderClasses(c); break;
-      case 'reports': await this.renderReports(c); break;
       case 'notifications': await this.renderNotifications(c); break;
       case 'studentDetail': await this.renderStudentDetail(c); break;
-      case 'teacherDetail': await this.renderTeacherDetail(c); break;
       default: c.innerHTML = '<div class="empty-state"><h3>ไม่พบหน้าที่ต้องการ</h3></div>';
     }
   },
@@ -620,23 +618,6 @@
   },
 
   // ==================== รายงานทั้งหมด ====================
-  async renderReports(c) {
-    var reports = [];
-    try { var r = await API.getMonthlyReports(); if (r.success) reports = r.reports; } catch (e) {}
-    var h = '<div class="section-header"><h2>รายงานทั้งหมด</h2></div>';
-    if (reports.length === 0) h += '<div class="empty-state"><h3>ยังไม่มีรายงาน</h3></div>';
-    else {
-      h += '<div class="table-wrap"><table><thead><tr><th>ห้องเรียน</th><th>ช่วงเวลา</th><th>ไฟล์</th><th>สถานะ</th><th>วันที่</th></tr></thead><tbody>';
-      reports.forEach(function (r) {
-        h += '<tr><td><strong>' + r.className + '</strong></td><td>' + App.getMonthName(r.month) + ' ' + r.year + '</td>';
-        h += '<td>' + (r.fileURL ? '<a href="' + r.fileURL + '" target="_blank">PDF</a>' : '-') + '</td>';
-        h += '<td>' + App.statusBadge(r.status) + '</td><td class="text-sm">' + (r.submitDate || '-') + '</td></tr>';
-      });
-      h += '</tbody></table></div>';
-    }
-    c.innerHTML = h;
-  },
-
   // ==================== แจ้งเตือน ====================
   async renderNotifications(c) {
     var notifications = [];
@@ -799,38 +780,6 @@
     el.innerHTML = h;
   },
 
-  // ==================== รายงานครู ====================
-  async renderTeacherDetail(c) {
-    var teachers = [];
-    try { var r = await API.getTeachers(); if (r.success) teachers = r.teachers; } catch (e) {}
-    var h = '<div class="section-header"><h2>รายงานครู</h2></div><div class="filter-bar"><select class="form-control" id="tchReportSelect" onchange="App.loadTeacherReport()"><option value="">เลือกครู</option>';
-    teachers.forEach(function (t) { h += '<option value="' + t.id + '">' + t.name + '</option>'; });
-    h += '</select></div><div id="teacherReportContent"></div>';
-    c.innerHTML = h;
-  },
-  async loadTeacherReport() {
-    var tid = document.getElementById('tchReportSelect').value;
-    var el = document.getElementById('teacherReportContent');
-    if (!tid) { el.innerHTML = ''; return; }
-    var classes = [];
-    try { var r = await API.getClasses({ teacherId: tid }); if (r.success) classes = r.classes; } catch (e) {}
-    if (classes.length === 0) { el.innerHTML = '<div class="empty-state"><h3>ยังไม่มีห้องเรียน</h3></div>'; return; }
-    var h = '<div class="card-grid card-grid-2">';
-    for (var i = 0; i < classes.length; i++) {
-      var cl = classes[i];
-      var stats = { studentCount: 0, monthPresent: 0, monthAbsent: 0, totalPagesRead: 0 };
-      try { var r = await API.getTeacherStats(tid, cl.id); if (r.success) stats = r.stats; } catch (e) {}
-      h += '<div class="card"><div class="card-header"><h3>' + cl.name + '</h3></div>';
-      h += '<div class="card-grid card-grid-2" style="gap:12px">';
-      h += '<div><p class="text-xs text-muted">นักเรียน</p><h4>' + stats.studentCount + '</h4></div>';
-      h += '<div><p class="text-xs text-muted">หน้าที่อ่าน</p><h4>' + stats.totalPagesRead + '</h4></div>';
-      h += '<div><p class="text-xs text-muted">มาเรียน</p><h4 style="color:var(--forest)">' + stats.monthPresent + '</h4></div>';
-      h += '<div><p class="text-xs text-muted">ไม่มา</p><h4 style="color:var(--coral)">' + stats.monthAbsent + '</h4></div>';
-      h += '</div></div>';
-    }
-    h += '</div>';
-    el.innerHTML = h;
-  }
 };
 
 document.addEventListener('DOMContentLoaded', function () { App.init(); });
