@@ -187,7 +187,7 @@ function handleLogin(data) {
   }
   var sheet = getUsersSheet();
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: false, message: 'ยังไม่มีผู้ใช้ในระบบ กรุณาเพิ่มครูก่อน' };
+  if (lastRow < 2)     return { success: false, message: 'รหัสไม่ถูกต้อง' };
   var rows = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
   for (var i = 0; i < rows.length; i++) {
     var uId = String(rows[i][0] || '').trim();
@@ -208,7 +208,7 @@ function handleLogin(data) {
       };
     }
   }
-  return { success: false, message: 'รหัสครูหรือรหัสผ่านไม่ถูกต้อง' };
+  return { success: false, message: 'รหัสไม่ถูกต้อง' };
 }
 
 // ==================== STUDENT DATA ====================

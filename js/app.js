@@ -84,7 +84,7 @@
         error.classList.remove('hidden');
       }
     } catch (err) {
-      error.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+      error.textContent = 'รหัสไม่ถูกต้อง';
       error.classList.remove('hidden');
     }
     btn.disabled = false;
