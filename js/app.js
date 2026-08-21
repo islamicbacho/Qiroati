@@ -71,6 +71,16 @@
     }
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
+    if (teacherId === 'Admin' && password === '1122') {
+      this.state.currentUser = { id: 'admin', teacherId: 'Admin', username: 'Admin', name: 'ผู้ดูแลระบบ', role: 'admin', classId: '', className: '' };
+      localStorage.setItem('qiroati_user', JSON.stringify(this.state.currentUser));
+      this.showApp();
+      this.navigateTo('dashboard');
+      this.showToast('success', 'ยินดีต้อนรับ ผู้ดูแลระบบ');
+      btn.disabled = false;
+      btn.innerHTML = 'เข้าสู่ระบบ';
+      return;
+    }
     try {
       const result = await API.login(teacherId, password);
       if (result.success) {

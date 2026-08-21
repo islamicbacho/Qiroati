@@ -49,7 +49,7 @@ const API = {
   },
 
   // === Auth ===
-  login: (teacherId, password) => API.call('login', { teacherId, password }),
+  login: (teacherId, password) => API.call('login', { teacherId, password, username: teacherId }),
 
   // === Students ===
   getStudents: (filters) => API.call('getStudents', filters || {}),
