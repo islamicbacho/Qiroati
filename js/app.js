@@ -233,6 +233,18 @@
   async renderDashboard(c) {
     var s = { totalStudents: 0, totalClasses: 0, totalTeachers: 0, todayPresent: 0, todayAbsent: 0, pendingReports: 0, approvedReports: 0, passed: 0, needsImprovement: 0 };
     try { var r = await API.getDashboardStats(); if (r.success) s = r.stats; } catch (e) {}
+    if (!s.totalStudents) {
+      try {
+        var sr = await API.getStudents();
+        if (sr.success && sr.students) {
+          s.totalStudents = sr.students.length;
+          var cls = {}; var tch = {};
+          sr.students.forEach(function(st) { if (st.className) cls[st.className] = true; if (st.teacherName) tch[st.teacherName] = true; });
+          s.totalClasses = Object.keys(cls).length;
+          s.totalTeachers = Object.keys(tch).length;
+        }
+      } catch (e) {}
+    }
     c.innerHTML =
       '<div class="section-header"><h2>ภาพรวมระบบ</h2></div>' +
       '<div class="card-grid card-grid-4 mb-3">' +

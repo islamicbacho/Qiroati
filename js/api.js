@@ -8,43 +8,37 @@ const API = {
   GAS_URL: 'https://script.google.com/macros/s/AKfycbzDgMBljJSn_NzV2AhSVkKTIydD3hsZUac_p6hrgga7sN-uHZDYmSCV0RWduUdB5N_-eQ/exec',
 
   async call(action, data) {
-    const payload = { action, ...(data || {}) };
+    var payload = { action: action };
+    if (data) { Object.keys(data).forEach(function(k) { payload[k] = data[k]; }); }
     
+    var controller = null;
+    var timeoutId = null;
     try {
-      // Try direct fetch first (works when CORS is configured)
-      const response = await fetch(this.GAS_URL, {
+      controller = new AbortController();
+      timeoutId = setTimeout(function() { controller.abort(); }, 5000);
+      var response = await fetch(this.GAS_URL, {
         method: 'POST',
-        mode: 'cors',
         body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain' }
+        headers: { 'Content-Type': 'text/plain' },
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       return await response.json();
-    } catch (corsError) {
-      // Fallback: no-cors mode (can't read response, so use redirect trick)
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
       try {
-        const response = await fetch(this.GAS_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          body: JSON.stringify(payload)
-        });
-        // no-cors returns opaque response, try URL parameter approach
-        return await this.callViaGet(action, data);
+        var controller2 = new AbortController();
+        var timeoutId2 = setTimeout(function() { controller2.abort(); }, 5000);
+        var params = new URLSearchParams();
+        params.append('action', action);
+        if (data) { Object.keys(data).forEach(function(k) { params.append(k, typeof data[k] === 'object' ? JSON.stringify(data[k]) : String(data[k])); }); }
+        var url = this.GAS_URL + '?' + params.toString();
+        var response2 = await fetch(url, { method: 'GET', signal: controller2.signal });
+        clearTimeout(timeoutId2);
+        return await response2.json();
       } catch (e2) {
-        console.error('API Error:', e2);
-        return { success: false, message: 'Cannot connect to server: ' + e2.message };
+        return { success: false, message: 'offline' };
       }
-    }
-  },
-
-  // Fallback: use GET parameters (avoids CORS entirely)
-  async callViaGet(action, data) {
-    const params = new URLSearchParams({ action, ...(data || {}) });
-    const url = this.GAS_URL + '?' + params.toString();
-    try {
-      const response = await fetch(url, { method: 'GET', mode: 'cors' });
-      return await response.json();
-    } catch (e) {
-      return { success: false, message: 'GET fallback failed: ' + e.message };
     }
   },
 
