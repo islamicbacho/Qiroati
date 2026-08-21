@@ -58,6 +58,36 @@
     document.getElementById('appLayout').classList.remove('hidden');
     this.updateUserInfo();
   },
+  getLocalTeachers() {
+    try { return JSON.parse(localStorage.getItem('qiroati_teachers') || '[]'); } catch (e) { return []; }
+  },
+  saveLocalTeachers(list) {
+    localStorage.setItem('qiroati_teachers', JSON.stringify(list));
+  },
+  addLocalTeacher(name, password) {
+    var list = this.getLocalTeachers();
+    var maxNum = 0;
+    list.forEach(function(t) {
+      var m = t.teacherId.match(/^TCR(\d+)$/);
+      if (m) { var n = parseInt(m[1]); if (n > maxNum) maxNum = n; }
+    });
+    var tid = 'TCR' + String(maxNum + 1).padStart(3, '0');
+    var pass = password || tid;
+    list.push({ teacherId: tid, password: pass, name: name, status: 'active' });
+    this.saveLocalTeachers(list);
+    return { teacherId: tid, password: pass };
+  },
+  resetLocalTeacherPass(teacherId) {
+    var list = this.getLocalTeachers();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].teacherId === teacherId) {
+        list[i].password = teacherId;
+        this.saveLocalTeachers(list);
+        return true;
+      }
+    }
+    return false;
+  },
   async handleLogin() {
     const teacherId = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
@@ -81,6 +111,21 @@
       btn.innerHTML = 'เข้าสู่ระบบ';
       return;
     }
+    var localTeachers = this.getLocalTeachers();
+    var matched = null;
+    localTeachers.forEach(function(t) {
+      if (t.teacherId === teacherId && t.password === password && t.status === 'active') matched = t;
+    });
+    if (matched) {
+      this.state.currentUser = { id: matched.teacherId, teacherId: matched.teacherId, username: matched.teacherId, name: matched.name, role: 'teacher', classId: '', className: '' };
+      localStorage.setItem('qiroati_user', JSON.stringify(this.state.currentUser));
+      this.showApp();
+      this.navigateTo('dashboard');
+      this.showToast('success', 'ยินดีต้อนรับ ' + matched.name);
+      btn.disabled = false;
+      btn.innerHTML = 'เข้าสู่ระบบ';
+      return;
+    }
     try {
       const result = await API.login(teacherId, password);
       if (result.success) {
@@ -90,7 +135,7 @@
         this.navigateTo('dashboard');
         this.showToast('success', 'ยินดีต้อนรับ ' + result.user.name);
       } else {
-        error.textContent = result.message;
+        error.textContent = 'รหัสไม่ถูกต้อง';
         error.classList.remove('hidden');
       }
     } catch (err) {
@@ -573,25 +618,24 @@
 
   // ==================== จัดการครู ====================
   async renderTeachers(c) {
-    var teachers = [], users = [];
-    try {
-      var r = await API.getTeachers(); if (r.success) teachers = r.teachers;
-      var ur = await API.getUsers(); if (ur.success) users = ur.users;
-    } catch (e) {}
+    var teachers = [];
+    try { var r = await API.getTeachers(); if (r.success) teachers = r.teachers; } catch (e) {}
+    var localUsers = this.getLocalTeachers();
     var userMap = {};
-    users.forEach(function(u) { userMap[u.name] = u; });
+    localUsers.forEach(function(u) { userMap[u.name] = u; });
     var h = '<div class="section-header"><h2>จัดการครู</h2><div class="actions">' +
-      '<button class="btn btn-primary btn-sm" onclick="App.showAddTeacherModal()">+ เพิ่มครู</button> ' +
-      '<button class="btn btn-ghost btn-sm" onclick="App.syncTeachers()">ซิงค์ครูอัตโนมัติ</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="App.showAddTeacherModal()">+ เพิ่มครู</button>' +
       '</div></div>';
-    if (teachers.length === 0) h += '<div class="empty-state"><h3>ยังไม่มีครู</h3></div>';
-    else {
+    if (teachers.length === 0 && localUsers.length === 0) {
+      h += '<div class="empty-state"><h3>ยังไม่มีครู</h3><p>กด "+ เพิ่มครู" เพื่อสร้างบัญชีครูคนแรก</p></div>';
+    } else {
       h += '<div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อ</th><th>รหัสครู</th><th>รหัสผ่าน</th><th>ห้องเรียน</th><th>สถานะ</th><th>การดำเนินการ</th></tr></thead><tbody>';
-      teachers.forEach(function (t, i) {
+      var i = 1;
+      teachers.forEach(function (t) {
         var u = userMap[t.name];
         var tid = u ? u.teacherId : '<span style="color:#ef4444">ไม่มีบัญชี</span>';
         var pass = u ? u.password : '-';
-        h += '<tr><td>' + (i + 1) + '</td><td><strong>' + t.name + '</strong></td>';
+        h += '<tr><td>' + i + '</td><td><strong>' + t.name + '</strong></td>';
         h += '<td class="text-xs" style="font-weight:600;color:#3b82f6">' + tid + '</td>';
         h += '<td class="text-xs">' + pass + '</td>';
         h += '<td>' + (t.assignedClasses || []).join(', ') + '</td>';
@@ -602,11 +646,23 @@
           h += '<td><button class="btn btn-sm btn-primary" onclick="App.createTeacherAccount(\'' + t.name + '\')">สร้างบัญชี</button></td>';
         }
         h += '</tr>';
+        i++;
+      });
+      localUsers.forEach(function (u) {
+        var found = teachers.some(function(t) { return t.name === u.name; });
+        if (found) return;
+        h += '<tr><td>' + i + '</td><td><strong>' + u.name + '</strong></td>';
+        h += '<td class="text-xs" style="font-weight:600;color:#3b82f6">' + u.teacherId + '</td>';
+        h += '<td class="text-xs">' + u.password + '</td>';
+        h += '<td>-</td>';
+        h += '<td>' + App.statusBadge(u.status) + '</td>';
+        h += '<td><button class="btn btn-sm btn-ghost" onclick="App.resetTeacherPass(\'' + u.teacherId + '\')">รีเซ็ตรหัสผ่าน</button></td>';
+        h += '</tr>';
+        i++;
       });
       h += '</tbody></table></div>';
     }
     c.innerHTML = h;
-    this.state.teachers = teachers;
   },
   showAddTeacherModal() {
     this.showModal('เพิ่มครู', '<form onsubmit="App.addTeacher(event)">' +
@@ -618,43 +674,42 @@
     e.preventDefault();
     var name = document.getElementById('newTchName').value.trim();
     var pass = document.getElementById('newTchPass').value.trim();
-    var r = await API.createUser({ name: name, password: pass || undefined });
-    if (r.success) {
-      this.closeModal();
-      this.showToast('success', 'สร้างบัญชี ' + r.teacherId + ' สำเร็จ | รหัสผ่าน: ' + r.password);
-      this.renderTeachers(document.getElementById('contentArea'));
-    } else {
-      this.showToast('error', r.message);
-    }
+    var result = this.addLocalTeacher(name, pass);
+    this.closeModal();
+    this.showToast('success', 'สร้างบัญชี ' + result.teacherId + ' สำเร็จ | รหัสผ่าน: ' + result.password);
+    this.renderTeachers(document.getElementById('contentArea'));
   },
   async createTeacherAccount(name) {
-    var r = await API.createUser({ name: name });
-    if (r.success) {
-      this.showToast('success', 'สร้างบัญชี ' + r.teacherId + ' สำเร็จ | รหัสผ่าน: ' + r.password);
-      this.renderTeachers(document.getElementById('contentArea'));
-    } else {
-      this.showToast('error', r.message);
-    }
+    var result = this.addLocalTeacher(name);
+    this.showToast('success', 'สร้างบัญชี ' + result.teacherId + ' สำเร็จ | รหัสผ่าน: ' + result.password);
+    this.renderTeachers(document.getElementById('contentArea'));
   },
   async syncTeachers() {
-    var r = await API.syncTeachersToUsers();
-    if (r.success) {
-      this.showToast('success', r.message);
-      this.renderTeachers(document.getElementById('contentArea'));
+    var teachers = [];
+    try { var r = await API.getTeachers(); if (r.success) teachers = r.teachers; } catch (e) {}
+    if (teachers.length === 0) { this.showToast('error', 'ไม่พบรายชื่อครูจากข้อมูลนักเรียน'); return; }
+    var localUsers = this.getLocalTeachers();
+    var existingNames = {};
+    localUsers.forEach(function(u) { existingNames[u.name] = true; });
+    var added = 0;
+    teachers.forEach(function(t) {
+      if (!existingNames[t.name]) {
+        var result = App.addLocalTeacher(t.name);
+        added++;
+      }
+    });
+    if (added > 0) {
+      this.showToast('success', 'สร้างบัญชีครู ' + added + ' คนสำเร็จ');
     } else {
-      this.showToast('error', r.message);
+      this.showToast('info', 'ครูทุกคนมีบัญชีแล้ว');
     }
+    this.renderTeachers(document.getElementById('contentArea'));
   },
-
   async resetTeacherPass(teacherId) {
     if (!confirm('ต้องการรีเซ็ตรหัสผ่านของ ' + teacherId + ' ใช่หรือไม่? รหัสผ่านใหม่จะเป็นรหัสครูเดียวกัน')) return;
-    var r = await API.resetPassword({ teacherId: teacherId, newPassword: teacherId });
-    if (r.success) {
-      this.showToast('success', r.message);
-      this.renderTeachers(document.getElementById('contentArea'));
-    } else {
-      this.showToast('error', r.message);
-    }
+    this.resetLocalTeacherPass(teacherId);
+    this.showToast('success', 'รีเซ็ตรหัสผ่าน ' + teacherId + ' สำเร็จ รหัสใหม่: ' + teacherId);
+    this.renderTeachers(document.getElementById('contentArea'));
   },
 
   // ==================== จัดการห้องเรียน ====================
