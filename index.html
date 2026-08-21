@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="description" content="ระบบจัดการสอนอัลกุรอาน โรงเรียนบาเจาะ">
   <title>กีรออาตี | โรงเรียนบาเจาะ</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -157,7 +160,39 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/api.js?v=20260821"></script>
+  <script src="js/app.js?v=20260821"></script>
+  <script>
+  (function(){
+    var form = document.getElementById('loginForm');
+    if(!form) return;
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var u = document.getElementById('loginUsername').value.trim();
+      var p = document.getElementById('loginPassword').value;
+      var err = document.getElementById('loginError');
+      var btn = document.getElementById('loginBtn');
+      err.classList.add('hidden');
+      if(!u||!p){err.textContent='กรุณากรอกรหัสและรหัสผ่าน';err.classList.remove('hidden');return;}
+      if(u==='Admin'&&p==='1122'){
+        localStorage.setItem('qiroati_user',JSON.stringify({id:'admin',teacherId:'Admin',username:'Admin',name:'ผู้ดูแลระบบ',role:'admin',classId:'',className:''}));
+        if(typeof App!=='undefined'){App.showApp();App.navigateTo('dashboard');}
+        else{document.getElementById('loginPage').classList.add('hidden');document.getElementById('appLayout').classList.remove('hidden');}
+        return;
+      }
+      var teachers=[];
+      try{teachers=JSON.parse(localStorage.getItem('qiroati_teachers')||'[]');}catch(e){}
+      var found=null;
+      teachers.forEach(function(t){if(t.teacherId===u&&t.password===p&&t.status==='active')found=t;});
+      if(found){
+        localStorage.setItem('qiroati_user',JSON.stringify({id:found.teacherId,teacherId:found.teacherId,username:found.teacherId,name:found.name,role:'teacher',classId:'',className:''}));
+        if(typeof App!=='undefined'){App.showApp();App.navigateTo('dashboard');}
+        else{document.getElementById('loginPage').classList.add('hidden');document.getElementById('appLayout').classList.remove('hidden');}
+        return;
+      }
+      err.textContent='รหัสไม่ถูกต้อง';err.classList.remove('hidden');
+    });
+  })();
+  </script>
 </body>
 </html>
